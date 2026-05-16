@@ -1,4 +1,4 @@
---// sanity.miami | Loader + Main UI + Hitbox tools + Local configs
+--// sanity.miami | Full UI + Hitbox Debug + Local Configs | All Black UI + White Text/Buttons
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -8,20 +8,16 @@ local HttpService = game:GetService("HttpService")
 
 local LOCAL_PLAYER = Players.LocalPlayer
 
--- Destroy old main UI (keep watermark separate)
-local oldRoot = CoreGui:FindFirstChild("sanity.miami_Root")
-if oldRoot then oldRoot:Destroy() end
-
---------------------------------------------------
--- WATERMARK (separate, fixed size, draggable, always on)
---------------------------------------------------
+----------------------------------------------------------------
+-- WATERMARK (ALWAYS ON, FIXED SIZE, DRAGGABLE)
+----------------------------------------------------------------
 
 local WMGui = CoreGui:FindFirstChild("sanity.miami_Watermark")
 if not WMGui then
     WMGui = Instance.new("ScreenGui")
     WMGui.Name = "sanity.miami_Watermark"
-    WMGui.ResetOnSpawn = false
     WMGui.IgnoreGuiInset = true
+    WMGui.ResetOnSpawn = false
     WMGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     WMGui.Parent = CoreGui
 end
@@ -31,9 +27,9 @@ if not Watermark then
     Watermark = Instance.new("TextLabel")
     Watermark.Name = "WatermarkLabel"
     Watermark.BackgroundTransparency = 1
-    Watermark.Size = UDim2.fromOffset(200, 20) -- fixed size
+    Watermark.Size = UDim2.fromOffset(200, 20)
     Watermark.AnchorPoint = Vector2.new(0.5, 1)
-    Watermark.Position = UDim2.new(0.5, 0, 0.97, 0) -- really low middle
+    Watermark.Position = UDim2.new(0.5, 0, 0.97, 0)
     Watermark.Font = Enum.Font.Code
     Watermark.Text = "sanity.miami"
     Watermark.TextColor3 = Color3.fromRGB(0, 0, 0)
@@ -41,1393 +37,401 @@ if not Watermark then
     Watermark.Parent = WMGui
 end
 
--- Draggable watermark, but keep size constant
+-- Draggable watermark (fixed size)
 do
     local dragging, dragStart, startPos
-    Watermark.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+    Watermark.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then
             dragging = true
-            dragStart = input.Position
+            dragStart = i.Position
             startPos = Watermark.Position
         end
     end)
-    Watermark.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+    Watermark.InputEnded:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then
             dragging = false
         end
     end)
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-            local delta = input.Position - dragStart
+    UserInputService.InputChanged:Connect(function(i)
+        if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = i.Position - dragStart
             Watermark.Position = UDim2.new(
                 startPos.X.Scale,
                 startPos.X.Offset + delta.X,
                 startPos.Y.Scale,
                 startPos.Y.Offset + delta.Y
             )
-            Watermark.Size = UDim2.fromOffset(200, 20) -- enforce fixed size
+            Watermark.Size = UDim2.fromOffset(200, 20)
         end
     end)
 end
 
---------------------------------------------------
+----------------------------------------------------------------
 -- ROOT GUI
---------------------------------------------------
+----------------------------------------------------------------
+
+local old = CoreGui:FindFirstChild("sanity.miami_Root")
+if old then old:Destroy() end
 
 local ROOT = Instance.new("ScreenGui")
 ROOT.Name = "sanity.miami_Root"
-ROOT.ResetOnSpawn = false
 ROOT.IgnoreGuiInset = true
+ROOT.ResetOnSpawn = false
 ROOT.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ROOT.Parent = CoreGui
 
--- Fullscreen container
-local FullContainer = Instance.new("Frame")
-FullContainer.Name = "FullContainer"
-FullContainer.BackgroundTransparency = 1
-FullContainer.Size = UDim2.fromScale(1, 1)
-FullContainer.Position = UDim2.fromScale(0, 0)
-FullContainer.Parent = ROOT
+local Full = Instance.new("Frame", ROOT)
+Full.Size = UDim2.fromScale(1,1)
+Full.BackgroundTransparency = 1
 
--- 16:9 container (dominant height)
-local AspectContainer = Instance.new("Frame")
-AspectContainer.Name = "AspectContainer"
-AspectContainer.AnchorPoint = Vector2.new(0.5, 0.5)
-AspectContainer.Position = UDim2.fromScale(0.5, 0.5)
-AspectContainer.Size = UDim2.fromScale(1, 1)
-AspectContainer.BackgroundTransparency = 1
-AspectContainer.Parent = FullContainer
+local Aspect = Instance.new("Frame", Full)
+Aspect.AnchorPoint = Vector2.new(0.5,0.5)
+Aspect.Position = UDim2.fromScale(0.5,0.5)
+Aspect.Size = UDim2.fromScale(1,1)
+Aspect.BackgroundTransparency = 1
 
-local AspectConstraint = Instance.new("UIAspectRatioConstraint")
-AspectConstraint.AspectRatio = 16/9
-AspectConstraint.DominantAxis = Enum.DominantAxis.Height
-AspectConstraint.Parent = AspectContainer
+local AR = Instance.new("UIAspectRatioConstraint", Aspect)
+AR.AspectRatio = 16/9
+AR.DominantAxis = Enum.DominantAxis.Height
 
-local UIScale = Instance.new("UIScale")
+local UIScale = Instance.new("UIScale", Aspect)
 UIScale.Scale = 1
-UIScale.Parent = AspectContainer
---------------------------------------------------
--- LOADER UI
---------------------------------------------------
 
-local CORRECT_KEY = ".gg/sanitybleh"
+----------------------------------------------------------------
+-- LOCAL CONFIG SYSTEM
+----------------------------------------------------------------
 
-local LoaderFrame = Instance.new("Frame")
-LoaderFrame.Name = "LoaderFrame"
-LoaderFrame.Size = UDim2.fromScale(0.55, 0.5)
-LoaderFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-LoaderFrame.Position = UDim2.fromScale(0.5, 0.5)
-LoaderFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-LoaderFrame.BorderSizePixel = 0
-LoaderFrame.Parent = AspectContainer
+local CONFIG_DIR = "sanity_configs"
+local DEFAULT_CONFIG = "sanity_default"
 
-local LoaderCorner = Instance.new("UICorner", LoaderFrame)
-LoaderCorner.CornerRadius = UDim.new(0, 12)
-
-local LoaderStroke = Instance.new("UIStroke", LoaderFrame)
-LoaderStroke.Color = Color3.fromRGB(60, 60, 60)
-LoaderStroke.Thickness = 1
-
--- Dragging loader
-do
-    local dragging, dragStart, startPos
-    LoaderFrame.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true
-            dragStart = input.Position
-            startPos = LoaderFrame.Position
-        end
-    end)
-    LoaderFrame.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = false
-        end
-    end)
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-            local delta = input.Position - dragStart
-            LoaderFrame.Position = UDim2.new(
-                startPos.X.Scale,
-                startPos.X.Offset + delta.X,
-                startPos.Y.Scale,
-                startPos.Y.Offset + delta.Y
-            )
-        end
-    end)
+local function safeWrite(path, data)
+    if writefile then pcall(writefile, path, data) end
 end
 
--- Loader title
-local LoaderTitle = Instance.new("TextLabel")
-LoaderTitle.BackgroundTransparency = 1
-LoaderTitle.Position = UDim2.fromScale(0.06, 0.08)
-LoaderTitle.Size = UDim2.fromOffset(250, 30)
-LoaderTitle.Font = Enum.Font.Code
-LoaderTitle.Text = "sanity.miami"
-LoaderTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-LoaderTitle.TextSize = 24
-LoaderTitle.TextXAlignment = Enum.TextXAlignment.Left
-LoaderTitle.Parent = LoaderFrame
-
--- Close button (only hides, watermark stays)
-local LoaderClose = Instance.new("TextButton")
-LoaderClose.BackgroundTransparency = 1
-LoaderClose.Size = UDim2.fromOffset(32, 32)
-LoaderClose.Position = UDim2.fromScale(0.91, 0.06)
-LoaderClose.Font = Enum.Font.Code
-LoaderClose.Text = "✕"
-LoaderClose.TextColor3 = Color3.fromRGB(160, 160, 160)
-LoaderClose.TextSize = 18
-LoaderClose.Parent = LoaderFrame
-
-LoaderClose.MouseButton1Click:Connect(function()
-    LoaderFrame.Visible = false
-end)
-
--- Universal selection frame
-local UniversalFrame = Instance.new("Frame")
-UniversalFrame.Name = "Universal"
-UniversalFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
-UniversalFrame.BorderSizePixel = 0
-UniversalFrame.Position = UDim2.fromScale(0.06, 0.26)
-UniversalFrame.Size = UDim2.fromScale(0.88, 0.16)
-UniversalFrame.Parent = LoaderFrame
-
-local UniversalCorner = Instance.new("UICorner", UniversalFrame)
-UniversalCorner.CornerRadius = UDim.new(0, 8)
-
-local UniversalStroke = Instance.new("UIStroke", UniversalFrame)
-UniversalStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-UniversalStroke.Color = Color3.fromRGB(80, 80, 80)
-UniversalStroke.Thickness = 1
-
-local UniversalLabel = Instance.new("TextLabel")
-UniversalLabel.BackgroundTransparency = 1
-UniversalLabel.Position = UDim2.fromScale(0.05, 0)
-UniversalLabel.Size = UDim2.new(0.9, 0, 1, 0)
-UniversalLabel.Font = Enum.Font.Code
-UniversalLabel.Text = "Universal Script"
-UniversalLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
-UniversalLabel.TextSize = 16
-UniversalLabel.TextXAlignment = Enum.TextXAlignment.Left
-UniversalLabel.Parent = UniversalFrame
-
--- Key box
-local KeyBox = Instance.new("TextBox")
-KeyBox.Name = "KeyTextBox"
-KeyBox.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-KeyBox.BorderSizePixel = 0
-KeyBox.Position = UDim2.fromScale(0.06, 0.48)
-KeyBox.Size = UDim2.fromScale(0.88, 0.14)
-KeyBox.Font = Enum.Font.Code
-KeyBox.PlaceholderText = "discord.gg/j3tRy9meTy"
-KeyBox.Text = ""
-KeyBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-KeyBox.PlaceholderColor3 = Color3.fromRGB(120, 120, 120)
-KeyBox.TextSize = 15
-KeyBox.TextXAlignment = Enum.TextXAlignment.Left
-KeyBox.Parent = LoaderFrame
-
-local KeyCorner = Instance.new("UICorner", KeyBox)
-KeyCorner.CornerRadius = UDim.new(0, 8)
-
-local KeyStroke = Instance.new("UIStroke", KeyBox)
-KeyStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-KeyStroke.Color = Color3.fromRGB(60, 60, 60)
-KeyStroke.Thickness = 1
-
--- Status label
-local LoaderStatus = Instance.new("TextLabel")
-LoaderStatus.Name = "StatusLabel"
-LoaderStatus.BackgroundTransparency = 1
-LoaderStatus.Position = UDim2.fromScale(0.06, 0.66)
-LoaderStatus.Size = UDim2.fromScale(0.88, 0.08)
-LoaderStatus.Font = Enum.Font.Code
-LoaderStatus.Text = "Status: Pending Activation"
-LoaderStatus.TextColor3 = Color3.fromRGB(180, 180, 180)
-LoaderStatus.TextSize = 14
-LoaderStatus.TextXAlignment = Enum.TextXAlignment.Left
-LoaderStatus.Parent = LoaderFrame
-
--- Execute button
-local LoadBtn = Instance.new("TextButton")
-LoadBtn.Name = "Loadbtn"
-LoadBtn.BackgroundColor3 = Color3.fromRGB(240, 240, 240)
-LoadBtn.BorderSizePixel = 0
-LoadBtn.Position = UDim2.fromScale(0.06, 0.78)
-LoadBtn.Size = UDim2.fromScale(0.88, 0.16)
-LoadBtn.Font = Enum.Font.Code
-LoadBtn.Text = "Execute Layout"
-LoadBtn.TextColor3 = Color3.fromRGB(10, 10, 10)
-LoadBtn.TextSize = 16
-LoadBtn.Parent = LoaderFrame
-
-local LoadCorner = Instance.new("UICorner", LoadBtn)
-LoadCorner.CornerRadius = UDim.new(0, 8)
-
-local selectedOption = nil
-local selectedColor = Color3.fromRGB(255, 255, 255)
-local defaultColor = Color3.fromRGB(80, 80, 80)
-
-local function selectScript(scriptFrame, scriptName)
-    UniversalStroke.Color = defaultColor
-    if scriptFrame then
-        scriptFrame:FindFirstChildOfClass("UIStroke").Color = selectedColor
-        selectedOption = scriptName
-        LoaderStatus.Text = "Status: Ready to process [" .. scriptName .. "]"
-        LoaderStatus.TextColor3 = Color3.fromRGB(230, 230, 230)
-    else
-        selectedOption = nil
-        LoaderStatus.Text = "Status: Pending Activation"
-        LoaderStatus.TextColor3 = Color3.fromRGB(180, 180, 180)
+local function safeRead(path)
+    if isfile and isfile(path) then
+        local ok, data = pcall(readfile, path)
+        if ok then return data end
     end
+    return nil
 end
 
-UniversalFrame.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        selectScript(UniversalFrame, "Universal")
+local function listConfigs()
+    local names = {}
+    if listfiles then
+        local ok, files = pcall(listfiles, CONFIG_DIR)
+        if ok then
+            for _, f in ipairs(files) do
+                local n = f:match("([^/\\]+)%.json$")
+                if n then table.insert(names, n) end
+            end
+        end
     end
-end)
---------------------------------------------------
--- MAIN UI (hidden initially)
---------------------------------------------------
-
-local MainFrame = Instance.new("Frame")
-MainFrame.Name = "MainUI"
-MainFrame.Size = UDim2.fromScale(0.8, 0.8)
-MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-MainFrame.Position = UDim2.fromScale(0.5, 0.5)
-MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-MainFrame.BorderSizePixel = 0
-MainFrame.Visible = false
-MainFrame.Parent = AspectContainer
-
-local MainCorner = Instance.new("UICorner", MainFrame)
-MainCorner.CornerRadius = UDim.new(0, 8)
-
-local MainStroke = Instance.new("UIStroke", MainFrame)
-MainStroke.Color = Color3.fromRGB(70, 70, 70)
-MainStroke.Thickness = 1
-
--- Dragging main UI
-do
-    local dragging, dragStart, startPos
-    MainFrame.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true
-            dragStart = input.Position
-            startPos = MainFrame.Position
-        end
-    end)
-    MainFrame.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = false
-        end
-    end)
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-            local delta = input.Position - dragStart
-            MainFrame.Position = UDim2.new(
-                startPos.X.Scale,
-                startPos.X.Offset + delta.X,
-                startPos.Y.Scale,
-                startPos.Y.Offset + delta.Y
-            )
-        end
-    end)
+    table.sort(names)
+    return names
 end
 
--- Top bar
-local TopBar = Instance.new("Frame")
-TopBar.Name = "TopBar"
-TopBar.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-TopBar.BorderSizePixel = 0
-TopBar.Size = UDim2.new(1, 0, 0, 32)
-TopBar.Parent = MainFrame
+local CurrentConfig = {
+    ShowWatermark = true,
+    CustomCursor = false,
+    NotificationSide = "Right",
+    DPIScale = 0,
+    HitboxDebug = false,
+    HitboxOthersOnly = true,
+}
 
-local TopStroke = Instance.new("UIStroke", TopBar)
-TopStroke.Color = Color3.fromRGB(40, 40, 40)
-TopStroke.Thickness = 1
+local function applyConfig(tbl)
+    for k,v in pairs(tbl) do
+        CurrentConfig[k] = v
+    end
+    UIScale.Scale = 0.75 + CurrentConfig.DPIScale * 0.75
+    Watermark.Visible = CurrentConfig.ShowWatermark
+end
 
-local Title = Instance.new("TextLabel")
+local function saveConfig(name)
+    if not name or name == "" then name = "config_"..os.time() end
+    local path = CONFIG_DIR.."/"..name..".json"
+    safeWrite(path, HttpService:JSONEncode(CurrentConfig))
+end
+
+local function loadConfig(name)
+    local path = CONFIG_DIR.."/"..name..".json"
+    local raw = safeRead(path)
+    if not raw then return end
+    local ok, decoded = pcall(HttpService.JSONDecode, HttpService, raw)
+    if ok then applyConfig(decoded) end
+end
+
+loadConfig(DEFAULT_CONFIG)
+
+----------------------------------------------------------------
+-- LOADER UI (ALL BLACK, WHITE TEXT/BUTTONS)
+----------------------------------------------------------------
+
+local Loader = Instance.new("Frame", Aspect)
+Loader.Size = UDim2.fromScale(0.55,0.5)
+Loader.AnchorPoint = Vector2.new(0.5,0.5)
+Loader.Position = UDim2.fromScale(0.5,0.5)
+Loader.BackgroundColor3 = Color3.fromRGB(0,0,0)
+
+Instance.new("UICorner", Loader).CornerRadius = UDim.new(0,12)
+local LS = Instance.new("UIStroke", Loader)
+LS.Color = Color3.fromRGB(255,255,255)
+LS.Thickness = 1
+
+local Title = Instance.new("TextLabel", Loader)
 Title.BackgroundTransparency = 1
-Title.Position = UDim2.fromOffset(10, 0)
-Title.Size = UDim2.new(0, 250, 1, 0)
+Title.Position = UDim2.fromScale(0.06,0.08)
+Title.Size = UDim2.fromOffset(250,30)
 Title.Font = Enum.Font.Code
 Title.Text = "sanity.miami"
-Title.TextColor3 = Color3.fromRGB(235, 235, 235)
-Title.TextSize = 18
+Title.TextColor3 = Color3.fromRGB(255,255,255)
+Title.TextSize = 24
 Title.TextXAlignment = Enum.TextXAlignment.Left
-Title.Parent = TopBar
 
-local Subtitle = Instance.new("TextLabel")
-Subtitle.BackgroundTransparency = 1
-Subtitle.Position = UDim2.fromOffset(10, 18)
-Subtitle.Size = UDim2.new(0, 250, 1, -18)
-Subtitle.Font = Enum.Font.Code
-Subtitle.Text = "Universal"
-Subtitle.TextColor3 = Color3.fromRGB(150, 150, 150)
-Subtitle.TextSize = 12
-Subtitle.TextXAlignment = Enum.TextXAlignment.Left
-Subtitle.Parent = TopBar
-
-local CloseMain = Instance.new("TextButton")
-CloseMain.BackgroundTransparency = 1
-CloseMain.Size = UDim2.fromOffset(24, 24)
-CloseMain.Position = UDim2.new(1, -30, 0, 4)
-CloseMain.Font = Enum.Font.Code
-CloseMain.Text = "✕"
-CloseMain.TextSize = 18
-CloseMain.TextColor3 = Color3.fromRGB(180, 180, 180)
-CloseMain.Parent = TopBar
-
--- Close main only hides, watermark stays
-CloseMain.MouseButton1Click:Connect(function()
-    MainFrame.Visible = false
+local Close = Instance.new("TextButton", Loader)
+Close.BackgroundTransparency = 1
+Close.Size = UDim2.fromOffset(32,32)
+Close.Position = UDim2.fromScale(0.91,0.06)
+Close.Font = Enum.Font.Code
+Close.Text = "✕"
+Close.TextColor3 = Color3.fromRGB(255,255,255)
+Close.TextSize = 18
+Close.MouseButton1Click:Connect(function()
+    Loader.Visible = false
 end)
 
--- Sidebar
-local Sidebar = Instance.new("Frame")
-Sidebar.Name = "Sidebar"
-Sidebar.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
-Sidebar.BorderSizePixel = 0
-Sidebar.Position = UDim2.fromOffset(0, 32)
-Sidebar.Size = UDim2.new(0, 150, 1, -32)
-Sidebar.Parent = MainFrame
+local ScriptFrame = Instance.new("Frame", Loader)
+ScriptFrame.Position = UDim2.fromScale(0.06,0.26)
+ScriptFrame.Size = UDim2.fromScale(0.88,0.16)
+ScriptFrame.BackgroundColor3 = Color3.fromRGB(0,0,0)
+Instance.new("UICorner", ScriptFrame).CornerRadius = UDim.new(0,8)
+local SFStroke = Instance.new("UIStroke", ScriptFrame)
+SFStroke.Color = Color3.fromRGB(255,255,255)
 
-local SidebarStroke = Instance.new("UIStroke", Sidebar)
-SidebarStroke.Color = Color3.fromRGB(40, 40, 40)
-SidebarStroke.Thickness = 1
+local SFLabel = Instance.new("TextLabel", ScriptFrame)
+SFLabel.BackgroundTransparency = 1
+SFLabel.Position = UDim2.fromScale(0.05,0)
+SFLabel.Size = UDim2.new(0.9,0,1,0)
+SFLabel.Font = Enum.Font.Code
+SFLabel.Text = "Universal Script"
+SFLabel.TextColor3 = Color3.fromRGB(255,255,255)
+SFLabel.TextSize = 16
+SFLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+local KeyBox = Instance.new("TextBox", Loader)
+KeyBox.BackgroundColor3 = Color3.fromRGB(0,0,0)
+KeyBox.Position = UDim2.fromScale(0.06,0.48)
+KeyBox.Size = UDim2.fromScale(0.88,0.14)
+KeyBox.Font = Enum.Font.Code
+KeyBox.PlaceholderText = "discord.gg/j3tRy9meTy"
+KeyBox.TextColor3 = Color3.fromRGB(255,255,255)
+KeyBox.PlaceholderColor3 = Color3.fromRGB(150,150,150)
+KeyBox.TextSize = 15
+KeyBox.TextXAlignment = Enum.TextXAlignment.Left
+Instance.new("UICorner", KeyBox).CornerRadius = UDim.new(0,8)
+local KBStroke = Instance.new("UIStroke", KeyBox)
+KBStroke.Color = Color3.fromRGB(255,255,255)
+
+local Status = Instance.new("TextLabel", Loader)
+Status.BackgroundTransparency = 1
+Status.Position = UDim2.fromScale(0.06,0.66)
+Status.Size = UDim2.fromScale(0.88,0.08)
+Status.Font = Enum.Font.Code
+Status.Text = "Status: Pending Activation"
+Status.TextColor3 = Color3.fromRGB(255,255,255)
+Status.TextSize = 14
+Status.TextXAlignment = Enum.TextXAlignment.Left
+
+local LoadBtn = Instance.new("TextButton", Loader)
+LoadBtn.BackgroundColor3 = Color3.fromRGB(255,255,255)
+LoadBtn.Position = UDim2.fromScale(0.06,0.78)
+LoadBtn.Size = UDim2.fromScale(0.88,0.16)
+LoadBtn.Font = Enum.Font.Code
+LoadBtn.Text = "Execute Layout"
+LoadBtn.TextColor3 = Color3.fromRGB(0,0,0)
+LoadBtn.TextSize = 16
+Instance.new("UICorner", LoadBtn).CornerRadius = UDim.new(0,8)
+
+local selected = true
+
+----------------------------------------------------------------
+-- MAIN UI (ALL BLACK, WHITE TEXT)
+----------------------------------------------------------------
+
+local Main = Instance.new("Frame", Aspect)
+Main.Size = UDim2.fromScale(0.8,0.8)
+Main.AnchorPoint = Vector2.new(0.5,0.5)
+Main.Position = UDim2.fromScale(0.5,0.5)
+Main.BackgroundColor3 = Color3.fromRGB(0,0,0)
+Main.Visible = false
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0,8)
+local MS = Instance.new("UIStroke", Main)
+MS.Color = Color3.fromRGB(255,255,255)
+
+local Top = Instance.new("Frame", Main)
+Top.Size = UDim2.new(1,0,0,32)
+Top.BackgroundColor3 = Color3.fromRGB(0,0,0)
+local TS = Instance.new("UIStroke", Top)
+TS.Color = Color3.fromRGB(255,255,255)
+
+local TTitle = Instance.new("TextLabel", Top)
+TTitle.BackgroundTransparency = 1
+TTitle.Position = UDim2.fromOffset(10,0)
+TTitle.Size = UDim2.new(0,250,1,0)
+TTitle.Font = Enum.Font.Code
+TTitle.Text = "sanity.miami"
+TTitle.TextColor3 = Color3.fromRGB(255,255,255)
+TTitle.TextSize = 18
+TTitle.TextXAlignment = Enum.TextXAlignment.Left
+
+local CloseMain = Instance.new("TextButton", Top)
+CloseMain.BackgroundTransparency = 1
+CloseMain.Size = UDim2.fromOffset(24,24)
+CloseMain.Position = UDim2.new(1,-30,0,4)
+CloseMain.Font = Enum.Font.Code
+CloseMain.Text = "✕"
+CloseMain.TextColor3 = Color3.fromRGB(255,255,255)
+CloseMain.TextSize = 18
+CloseMain.MouseButton1Click:Connect(function()
+    Main.Visible = false
+end)
+
+local Sidebar = Instance.new("Frame", Main)
+Sidebar.Position = UDim2.fromOffset(0,32)
+Sidebar.Size = UDim2.new(0,150,1,-32)
+Sidebar.BackgroundColor3 = Color3.fromRGB(0,0,0)
+local SS = Instance.new("UIStroke", Sidebar)
+SS.Color = Color3.fromRGB(255,255,255)
 
 local TabList = Instance.new("UIListLayout", Sidebar)
-TabList.Padding = UDim.new(0, 4)
-TabList.FillDirection = Enum.FillDirection.Vertical
-TabList.HorizontalAlignment = Enum.HorizontalAlignment.Left
-TabList.VerticalAlignment = Enum.VerticalAlignment.Top
-TabList.SortOrder = Enum.SortOrder.LayoutOrder
+TabList.Padding = UDim.new(0,4)
 
-local function createTab(name)
-    local btn = Instance.new("TextButton")
-    btn.Name = name
-    btn.Size = UDim2.new(1, -10, 0, 32)
-    btn.Position = UDim2.fromOffset(5, 0)
-    btn.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
-    btn.BorderSizePixel = 0
-    btn.Font = Enum.Font.Code
-    btn.Text = name
-    btn.TextSize = 14
-    btn.TextColor3 = Color3.fromRGB(200, 200, 200)
-    btn.TextXAlignment = Enum.TextXAlignment.Left
-    btn.Parent = Sidebar
-
-    local corner = Instance.new("UICorner", btn)
-    corner.CornerRadius = UDim.new(0, 4)
-
-    return btn
+local function makeTab(name)
+    local b = Instance.new("TextButton", Sidebar)
+    b.Size = UDim2.new(1,-10,0,32)
+    b.Position = UDim2.fromOffset(5,0)
+    b.BackgroundColor3 = Color3.fromRGB(0,0,0)
+    b.Font = Enum.Font.Code
+    b.Text = name
+    b.TextColor3 = Color3.fromRGB(255,255,255)
+    b.TextSize = 14
+    Instance.new("UICorner", b).CornerRadius = UDim.new(0,4)
+    return b
 end
 
 local Tabs = {
-    Combat = createTab("Combat"),
-    Visuals = createTab("Visuals"),
-    ["Player Mods"] = createTab("Player Mods"),
-    ["UI Settings"] = createTab("UI Settings"),
+    Combat = makeTab("Combat"),
+    Visuals = makeTab("Visuals"),
+    ["UI Settings"] = makeTab("UI Settings"),
 }
 
--- Content container
-local Content = Instance.new("Frame")
-Content.Name = "Content"
-Content.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
-Content.BorderSizePixel = 0
-Content.Position = UDim2.fromOffset(150, 32)
-Content.Size = UDim2.new(1, -150, 1, -32)
-Content.Parent = MainFrame
+local Content = Instance.new("Frame", Main)
+Content.Position = UDim2.fromOffset(150,32)
+Content.Size = UDim2.new(1,-150,1,-32)
+Content.BackgroundColor3 = Color3.fromRGB(0,0,0)
+local CS = Instance.new("UIStroke", Content)
+CS.Color = Color3.fromRGB(255,255,255)
 
-local ContentStroke = Instance.new("UIStroke", Content)
-ContentStroke.Color = Color3.fromRGB(40, 40, 40)
-ContentStroke.Thickness = 1
-
--- Pages (all fit inside Content)
-local CombatPage = Instance.new("Frame")
-CombatPage.Name = "CombatPage"
+local CombatPage = Instance.new("ScrollingFrame", Content)
+CombatPage.Size = UDim2.fromScale(1,1)
+CombatPage.CanvasSize = UDim2.new(0,0,0,0)
+CombatPage.ScrollBarThickness = 4
 CombatPage.BackgroundTransparency = 1
-CombatPage.Size = UDim2.fromScale(1, 1)
 CombatPage.Visible = false
-CombatPage.Parent = Content
+local CL = Instance.new("UIListLayout", CombatPage)
+CL.Padding = UDim.new(0,6)
 
-local VisualsPage = Instance.new("Frame")
-VisualsPage.Name = "VisualsPage"
+local VisualsPage = Instance.new("ScrollingFrame", Content)
+VisualsPage.Size = UDim2.fromScale(1,1)
+VisualsPage.CanvasSize = UDim2.new(0,0,0,0)
+VisualsPage.ScrollBarThickness = 4
 VisualsPage.BackgroundTransparency = 1
-VisualsPage.Size = UDim2.fromScale(1, 1)
 VisualsPage.Visible = false
-VisualsPage.Parent = Content
+local VL = Instance.new("UIListLayout", VisualsPage)
+VL.Padding = UDim.new(0,6)
 
-local PlayerModsPage = Instance.new("Frame")
-PlayerModsPage.Name = "PlayerModsPage"
-PlayerModsPage.BackgroundTransparency = 1
-PlayerModsPage.Size = UDim2.fromScale(1, 1)
-PlayerModsPage.Visible = false
-PlayerModsPage.Parent = Content
+local SettingsPage = Instance.new("ScrollingFrame", Content)
+SettingsPage.Size = UDim2.fromScale(1,1)
+SettingsPage.CanvasSize = UDim2.new(0,0,0,0)
+SettingsPage.ScrollBarThickness = 4
+SettingsPage.BackgroundTransparency = 1
+local SL = Instance.new("UIListLayout", SettingsPage)
+SL.Padding = UDim.new(0,6)
 
-local UISettingsPage = Instance.new("Frame")
-UISettingsPage.Name = "UISettingsPage"
-UISettingsPage.BackgroundTransparency = 1
-UISettingsPage.Size = UDim2.fromScale(1, 1)
-UISettingsPage.Visible = false
-UISettingsPage.Parent = Content
---------------------------------------------------
--- HELPERS
---------------------------------------------------
+----------------------------------------------------------------
+-- UI HELPERS (WHITE TEXT, WHITE BUTTONS)
+----------------------------------------------------------------
 
-local function createToggle(parent, text)
-    local container = Instance.new("Frame")
-    container.BackgroundTransparency = 1
-    container.Size = UDim2.new(1, -20, 0, 24)
-    container.LayoutOrder = 2
-    container.Parent = parent
+local function makeLabel(parent, text, size)
+    local l = Instance.new("TextLabel", parent)
+    l.BackgroundTransparency = 1
+    l.Size = UDim2.new(1,-20,0,size or 20)
+    l.Font = Enum.Font.Code
+    l.Text = text
+    l.TextColor3 = Color3.fromRGB(255,255,255)
+    l.TextSize = 16
+    l.TextXAlignment = Enum.TextXAlignment.Left
+    return l
+end
 
-    local label = Instance.new("TextLabel")
-    label.BackgroundTransparency = 1
-    label.Position = UDim2.fromOffset(0, 0)
-    label.Size = UDim2.new(1, -40, 1, 0)
-    label.Font = Enum.Font.Code
-    label.Text = text
-    label.TextColor3 = Color3.fromRGB(210, 210, 210)
-    label.TextSize = 14
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = container
+local function makeToggle(parent, text, default)
+    local f = Instance.new("Frame", parent)
+    f.BackgroundTransparency = 1
+    f.Size = UDim2.new(1,-20,0,24)
 
-    local toggle = Instance.new("TextButton")
-    toggle.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    toggle.BorderSizePixel = 0
-    toggle.Size = UDim2.fromOffset(32, 18)
-    toggle.Position = UDim2.new(1, -32, 0.5, 0)
-    toggle.AnchorPoint = Vector2.new(1, 0.5)
-    toggle.Font = Enum.Font.Code
-    toggle.Text = ""
-    toggle.Parent = container
+    local l = Instance.new("TextLabel", f)
+    l.BackgroundTransparency = 1
+    l.Size = UDim2.new(1,-40,1,0)
+    l.Font = Enum.Font.Code
+    l.Text = text
+    l.TextColor3 = Color3.fromRGB(255,255,255)
+    l.TextSize = 14
+    l.TextXAlignment = Enum.TextXAlignment.Left
 
-    local tCorner = Instance.new("UICorner", toggle)
-    tCorner.CornerRadius = UDim.new(1, 0)
+    local b = Instance.new("TextButton", f)
+    b.Size = UDim2.fromOffset(32,18)
+    b.Position = UDim2.new(1,-32,0.5,0)
+    b.AnchorPoint = Vector2.new(1,0.5)
+    b.BackgroundColor3 = Color3.fromRGB(255,255,255)
+    b.Text = ""
+    Instance.new("UICorner", b).CornerRadius = UDim.new(1,0)
 
-    local knob = Instance.new("Frame")
-    knob.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
-    knob.BorderSizePixel = 0
-    knob.Size = UDim2.fromOffset(14, 14)
-    knob.Position = UDim2.fromOffset(2, 2)
-    knob.Parent = toggle
+    local knob = Instance.new("Frame", b)
+    knob.Size = UDim2.fromOffset(14,14)
+    knob.Position = UDim2.fromOffset(2,2)
+    knob.BackgroundColor3 = Color3.fromRGB(0,0,0)
+    Instance.new("UICorner", knob).CornerRadius = UDim.new(1,0)
 
-    local kCorner = Instance.new("UICorner", knob)
-    kCorner.CornerRadius = UDim.new(1, 0)
-
-    local state = false
+    local state = default
     local function update()
         if state then
-            toggle.BackgroundColor3 = Color3.fromRGB(220, 220, 220)
-            knob.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-            knob.Position = UDim2.fromOffset(32 - 14 - 2, 2)
+            b.BackgroundColor3 = Color3.fromRGB(255,255,255)
+            knob.Position = UDim2.fromOffset(32-14-2,2)
         else
-            toggle.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-            knob.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
-            knob.Position = UDim2.fromOffset(2, 2)
+            b.BackgroundColor3 = Color3.fromRGB(100,100,100)
+            knob.Position = UDim2.fromOffset(2,2)
         end
     end
 
-    toggle.MouseButton1Click:Connect(function()
+    b.MouseButton1Click:Connect(function()
         state = not state
         update()
     end)
 
     update()
+
     return {
-        Set = function(v)
-            state = v
-            update()
-        end,
-        Get = function()
-            return state
-        end,
+        Get = function() return state end,
+        Set = function(v) state=v update() end,
     }
 end
 
-local function createDropdown(parent, text, default)
-    local container = Instance.new("Frame")
-    container.BackgroundTransparency = 1
-    container.Size = UDim2.new(1, -20, 0, 24)
-    container.LayoutOrder = 2
-    container.Parent = parent
-
-    local label = Instance.new("TextLabel")
-    label.BackgroundTransparency = 1
-    label.Position = UDim2.fromOffset(0, 0)
-    label.Size = UDim2.new(1, -120, 1, 0)
-    label.Font = Enum.Font.Code
-    label.Text = text
-    label.TextColor3 = Color3.fromRGB(210, 210, 210)
-    label.TextSize = 14
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = container
-
-    local box = Instance.new("TextButton")
-    box.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-    box.BorderSizePixel = 0
-    box.Size = UDim2.fromOffset(90, 20)
-    box.Position = UDim2.new(1, -90, 0.5, 0)
-    box.AnchorPoint = Vector2.new(1, 0.5)
-    box.Font = Enum.Font.Code
-    box.Text = default or "---"
-    box.TextSize = 13
-    box.TextColor3 = Color3.fromRGB(220, 220, 220)
-    box.TextXAlignment = Enum.TextXAlignment.Left
-    box.Parent = container
-
-    local corner = Instance.new("UICorner", box)
-    corner.CornerRadius = UDim.new(0, 3)
-
-    return box
-end
-
-local function createSlider(parent, text, default)
-    local container = Instance.new("Frame")
-    container.BackgroundTransparency = 1
-    container.Size = UDim2.new(1, -20, 0, 32)
-    container.LayoutOrder = 2
-    container.Parent = parent
-
-    local label = Instance.new("TextLabel")
-    label.BackgroundTransparency = 1
-    label.Position = UDim2.fromOffset(0, 0)
-    label.Size = UDim2.new(1, 0, 0, 16)
-    label.Font = Enum.Font.Code
-    label.Text = text
-    label.TextColor3 = Color3.fromRGB(210, 210, 210)
-    label.TextSize = 14
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = container
-
-    local bar = Instance.new("Frame")
-    bar.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-    bar.BorderSizePixel = 0
-    bar.Position = UDim2.fromOffset(0, 18)
-    bar.Size = UDim2.new(1, -40, 0, 6)
-    bar.Parent = container
-
-    local barCorner = Instance.new("UICorner", bar)
-    barCorner.CornerRadius = UDim.new(1, 0)
-
-    local fill = Instance.new("Frame")
-    fill.BackgroundColor3 = Color3.fromRGB(220, 220, 220)
-    fill.BorderSizePixel = 0
-    fill.Size = UDim2.new((default or 0), 0, 1, 0)
-    fill.Parent = bar
-
-    local fillCorner = Instance.new("UICorner", fill)
-    fillCorner.CornerRadius = UDim.new(1, 0)
-
-    local valueLabel = Instance.new("TextLabel")
-    valueLabel.BackgroundTransparency = 1
-    valueLabel.Position = UDim2.new(1, -40, 0, 14)
-    valueLabel.Size = UDim2.fromOffset(40, 16)
-    valueLabel.Font = Enum.Font.Code
-    valueLabel.Text = tostring(math.floor((default or 0) * 100)) .. "%"
-    valueLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-    valueLabel.TextSize = 12
-    valueLabel.TextXAlignment = Enum.TextXAlignment.Right
-    valueLabel.Parent = container
-
-    local value = default or 0
-
-    local function setFromX(x)
-        local rel = math.clamp((x - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
-        value = rel
-        fill.Size = UDim2.new(rel, 0, 1, 0)
-        valueLabel.Text = tostring(math.floor(rel * 100)) .. "%"
-    end
-
-    bar.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            setFromX(input.Position.X)
-        end
-    end)
-
-    UserInputService.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
-            if bar.AbsolutePosition and bar.AbsoluteSize then
-                setFromX(input.Position.X)
-            end
-        end
-    end)
-
-    return {
-        Get = function()
-            return value
-        end,
-        Set = function(v)
-            value = math.clamp(v, 0, 1)
-            fill.Size = UDim2.new(value, 0, 1, 0)
-            valueLabel.Text = tostring(math.floor(value * 100)) .. "%"
-        end,
-    }
-end
-
-local function createLabelValue(parent, text, value)
-    local container = Instance.new("Frame")
-    container.BackgroundTransparency = 1
-    container.Size = UDim2.new(1, -20, 0, 24)
-    container.LayoutOrder = 2
-    container.Parent = parent
-
-    local label = Instance.new("TextLabel")
-    label.BackgroundTransparency = 1
-    label.Position = UDim2.fromOffset(0, 0)
-    label.Size = UDim2.new(1, -80, 1, 0)
-    label.Font = Enum.Font.Code
-    label.Text = text
-    label.TextColor3 = Color3.fromRGB(210, 210, 210)
-    label.TextSize = 14
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = container
-
-    local valueLabel = Instance.new("TextLabel")
-    valueLabel.BackgroundTransparency = 1
-    valueLabel.Position = UDim2.new(1, -80, 0, 0)
-    valueLabel.Size = UDim2.fromOffset(80, 24)
-    valueLabel.Font = Enum.Font.Code
-    valueLabel.Text = value
-    valueLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-    valueLabel.TextSize = 14
-    valueLabel.TextXAlignment = Enum.TextXAlignment.Right
-    valueLabel.Parent = container
-
-    return valueLabel
-end
-
-local function createColorRow(parent, text)
-    local container = Instance.new("Frame")
-    container.BackgroundTransparency = 1
-    container.Size = UDim2.new(1, -20, 0, 24)
-    container.LayoutOrder = 2
-    container.Parent = parent
-
-    local label = Instance.new("TextLabel")
-    label.BackgroundTransparency = 1
-    label.Position = UDim2.fromOffset(0, 0)
-    label.Size = UDim2.new(1, -60, 1, 0)
-    label.Font = Enum.Font.Code
-    label.Text = text
-    label.TextColor3 = Color3.fromRGB(210, 210, 210)
-    label.TextSize = 14
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = container
-
-    local box = Instance.new("Frame")
-    box.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    box.BorderSizePixel = 0
-    box.Size = UDim2.fromOffset(40, 18)
-    box.Position = UDim2.new(1, -40, 0.5, 0)
-    box.AnchorPoint = Vector2.new(1, 0.5)
-    box.Parent = container
-
-    local corner = Instance.new("UICorner", box)
-    corner.CornerRadius = UDim.new(0, 3)
-
-    return box
-end
-
---------------------------------------------------
--- UI SETTINGS PAGE (left: Menu, right: Config)
---------------------------------------------------
-
-local MenuPanel = Instance.new("Frame")
-MenuPanel.Name = "MenuPanel"
-MenuPanel.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-MenuPanel.BorderSizePixel = 0
-MenuPanel.Position = UDim2.fromOffset(10, 10)
-MenuPanel.Size = UDim2.new(0.5, -15, 1, -20)
-MenuPanel.Parent = UISettingsPage
-
-local MenuCorner = Instance.new("UICorner", MenuPanel)
-MenuCorner.CornerRadius = UDim.new(0, 6)
-
-local MenuStroke = Instance.new("UIStroke", MenuPanel)
-MenuStroke.Color = Color3.fromRGB(60, 60, 60)
-MenuStroke.Thickness = 1
-
-local MenuTitle = Instance.new("TextLabel")
-MenuTitle.BackgroundTransparency = 1
-MenuTitle.Position = UDim2.fromOffset(10, 4)
-MenuTitle.Size = UDim2.new(1, -20, 0, 20)
-MenuTitle.Font = Enum.Font.Code
-MenuTitle.Text = "Menu"
-MenuTitle.TextColor3 = Color3.fromRGB(230, 230, 230)
-MenuTitle.TextSize = 16
-MenuTitle.TextXAlignment = Enum.TextXAlignment.Left
-MenuTitle.Parent = MenuPanel
-
-local MenuLine = Instance.new("Frame")
-MenuLine.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-MenuLine.BorderSizePixel = 0
-MenuLine.Position = UDim2.fromOffset(10, 24)
-MenuLine.Size = UDim2.new(1, -20, 0, 1)
-MenuLine.Parent = MenuPanel
-
-local MenuList = Instance.new("UIListLayout", MenuPanel)
-MenuList.Padding = UDim.new(0, 6)
-MenuList.FillDirection = Enum.FillDirection.Vertical
-MenuList.HorizontalAlignment = Enum.HorizontalAlignment.Left
-MenuList.VerticalAlignment = Enum.VerticalAlignment.Top
-MenuList.SortOrder = Enum.SortOrder.LayoutOrder
-
-MenuTitle.LayoutOrder = 0
-MenuLine.LayoutOrder = 1
-
--- Controls (we'll bind some to config + watermark)
-local ToggleWatermark = createToggle(MenuPanel, "Show Watermark")
-local ToggleCursor = createToggle(MenuPanel, "Custom Cursor")
-local DropdownNotifSide = createDropdown(MenuPanel, "Notification Side", "Right")
-local SliderDPI = createSlider(MenuPanel, "DPI Scale", 0)
-local MenuBindLabel = createLabelValue(MenuPanel, "Menu bind", "RightShift")
-
-local ThemesLabel = Instance.new("TextLabel")
-ThemesLabel.BackgroundTransparency = 1
-ThemesLabel.Size = UDim2.new(1, -20, 0, 22)
-ThemesLabel.LayoutOrder = 2
-ThemesLabel.Font = Enum.Font.Code
-ThemesLabel.Text = "Themes"
-ThemesLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
-ThemesLabel.TextSize = 15
-ThemesLabel.TextXAlignment = Enum.TextXAlignment.Left
-ThemesLabel.Parent = MenuPanel
-
-createColorRow(MenuPanel, "Background color")
-createColorRow(MenuPanel, "Main color")
-createColorRow(MenuPanel, "Accent color")
-createColorRow(MenuPanel, "Outline color")
-createColorRow(MenuPanel, "Font color")
-
-createDropdown(MenuPanel, "Font Face", "Code")
-createDropdown(MenuPanel, "Theme list", "---")
-
--- Bind watermark toggle
-ToggleWatermark.Set(true)
-Watermark.Visible = true
-ToggleWatermark.Set(ToggleWatermark.Get())
-ToggleWatermark.Set(true)
-ToggleWatermark.Set(ToggleWatermark.Get())
-ToggleWatermark.Set(true)
-
-ToggleWatermark.Set(true)
-ToggleWatermark.Set(ToggleWatermark.Get())
-ToggleWatermark.Set(true)
-
--- actually hook:
-ToggleWatermark.Set(true)
-Watermark.Visible = true
-local oldSetWM = ToggleWatermark.Set
-ToggleWatermark.Set = function(v)
-    oldSetWM(v)
-    Watermark.Visible = v
-end
-local BottomInfo = Instance.new("TextLabel")
-BottomInfo.BackgroundTransparency = 1
-BottomInfo.Size = UDim2.new(1, -20, 0, 18)
-BottomInfo.Position = UDim2.new(0, 10, 1, -22)
-BottomInfo.Font = Enum.Font.Code
-BottomInfo.Text = "[UP] Just a baseplate."
-BottomInfo.TextColor3 = Color3.fromRGB(120, 120, 120)
-BottomInfo.TextSize = 12
-BottomInfo.TextXAlignment = Enum.TextXAlignment.Left
-BottomInfo.Parent = Content
-
--- Right panel: Configuration
-local ConfigPanel = Instance.new("Frame")
-ConfigPanel.Name = "ConfigPanel"
-ConfigPanel.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-ConfigPanel.BorderSizePixel = 0
-ConfigPanel.Position = UDim2.new(0.5, 5, 0, 10)
-ConfigPanel.Size = UDim2.new(0.5, -15, 1, -20)
-ConfigPanel.Parent = UISettingsPage
-
-local ConfigCorner = Instance.new("UICorner", ConfigPanel)
-ConfigCorner.CornerRadius = UDim.new(0, 6)
-
-local ConfigStroke = Instance.new("UIStroke", ConfigPanel)
-ConfigStroke.Color = Color3.fromRGB(60, 60, 60)
-ConfigStroke.Thickness = 1
-
-local ConfigTitle = Instance.new("TextLabel")
-ConfigTitle.BackgroundTransparency = 1
-ConfigTitle.Position = UDim2.fromOffset(10, 4)
-ConfigTitle.Size = UDim2.new(1, -20, 0, 20)
-ConfigTitle.Font = Enum.Font.Code
-ConfigTitle.Text = "Configuration"
-ConfigTitle.TextColor3 = Color3.fromRGB(230, 230, 230)
-ConfigTitle.TextSize = 16
-ConfigTitle.TextXAlignment = Enum.TextXAlignment.Left
-ConfigTitle.Parent = ConfigPanel
-
-local ConfigLine = Instance.new("Frame")
-ConfigLine.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-ConfigLine.BorderSizePixel = 0
-ConfigLine.Position = UDim2.fromOffset(10, 24)
-ConfigLine.Size = UDim2.new(1, -20, 0, 1)
-ConfigLine.Parent = ConfigPanel
-
-local ConfigList = Instance.new("UIListLayout", ConfigPanel)
-ConfigList.Padding = UDim.new(0, 6)
-ConfigList.FillDirection = Enum.FillDirection.Vertical
-ConfigList.HorizontalAlignment = Enum.HorizontalAlignment.Left
-ConfigList.VerticalAlignment = Enum.VerticalAlignment.Top
-ConfigList.SortOrder = Enum.SortOrder.LayoutOrder
-
-ConfigTitle.LayoutOrder = 0
-ConfigLine.LayoutOrder = 1
-
-local NameRow = Instance.new("Frame")
-NameRow.BackgroundTransparency = 1
-NameRow.Size = UDim2.new(1, -20, 0, 24)
-NameRow.LayoutOrder = 2
-NameRow.Parent = ConfigPanel
-
-local NameLabel = Instance.new("TextLabel")
-NameLabel.BackgroundTransparency = 1
-NameLabel.Position = UDim2.fromOffset(0, 0)
-NameLabel.Size = UDim2.new(0, 90, 1, 0)
-NameLabel.Font = Enum.Font.Code
-NameLabel.Text = "Config name"
-NameLabel.TextColor3 = Color3.fromRGB(210, 210, 210)
-NameLabel.TextSize = 14
-NameLabel.TextXAlignment = Enum.TextXAlignment.Left
-NameLabel.Parent = NameRow
-
-local NameBox = Instance.new("TextBox")
-NameBox.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-NameBox.BorderSizePixel = 0
-NameBox.Position = UDim2.fromOffset(95, 2)
-NameBox.Size = UDim2.new(1, -95, 0, 20)
-NameBox.Font = Enum.Font.Code
-NameBox.Text = ""
-NameBox.PlaceholderText = "sanity_default"
-NameBox.TextColor3 = Color3.fromRGB(230, 230, 230)
-NameBox.PlaceholderColor3 = Color3.fromRGB(120, 120, 120)
-NameBox.TextSize = 13
-NameBox.TextXAlignment = Enum.TextXAlignment.Left
-NameBox.Parent = NameRow
-
-local NameCorner2 = Instance.new("UICorner", NameBox)
-NameCorner2.CornerRadius = UDim.new(0, 3)
-
-local function createButton(parent, text)
-    local btn = Instance.new("TextButton")
-    btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    btn.BorderSizePixel = 0
-    btn.Size = UDim2.new(0.5, -15, 0, 22)
-    btn.Font = Enum.Font.Code
-    btn.Text = text
-    btn.TextColor3 = Color3.fromRGB(220, 220, 220)
-    btn.TextSize = 13
-    btn.Parent = parent
-
-    local corner = Instance.new("UICorner", btn)
-    corner.CornerRadius = UDim.new(0, 3)
-
-    btn.MouseEnter:Connect(function()
-        btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    end)
-    btn.MouseLeave:Connect(function()
-        btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    end)
-
-    return btn
-end
-
-local CreateRow = Instance.new("Frame")
-CreateRow.BackgroundTransparency = 1
-CreateRow.Size = UDim2.new(1, -20, 0, 24)
-CreateRow.LayoutOrder = 2
-CreateRow.Parent = ConfigPanel
-
-local CreateBtn = createButton(CreateRow, "Create config")
-CreateBtn.Size = UDim2.new(0, 120, 0, 22)
-CreateBtn.Position = UDim2.fromOffset(0, 0)
-
-local ListRow = Instance.new("Frame")
-ListRow.BackgroundTransparency = 1
-ListRow.Size = UDim2.new(1, -20, 0, 24)
-ListRow.LayoutOrder = 2
-ListRow.Parent = ConfigPanel
-
-local ListLabel = Instance.new("TextLabel")
-ListLabel.BackgroundTransparency = 1
-ListLabel.Position = UDim2.fromOffset(0, 0)
-ListLabel.Size = UDim2.new(0, 80, 1, 0)
-ListLabel.Font = Enum.Font.Code
-ListLabel.Text = "Config list"
-ListLabel.TextColor3 = Color3.fromRGB(210, 210, 210)
-ListLabel.TextSize = 14
-ListLabel.TextXAlignment = Enum.TextXAlignment.Left
-ListLabel.Parent = ListRow
-
-local ListDropdown = Instance.new("TextButton")
-ListDropdown.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-ListDropdown.BorderSizePixel = 0
-ListDropdown.Position = UDim2.fromOffset(85, 2)
-ListDropdown.Size = UDim2.new(1, -85, 0, 20)
-ListDropdown.Font = Enum.Font.Code
-ListDropdown.Text = "---"
-ListDropdown.TextColor3 = Color3.fromRGB(220, 220, 220)
-ListDropdown.TextSize = 13
-ListDropdown.TextXAlignment = Enum.TextXAlignment.Left
-ListDropdown.Parent = ListRow
-
-local ListCorner2 = Instance.new("UICorner", ListDropdown)
-ListCorner2.CornerRadius = UDim.new(0, 3)
-
-local ButtonsGrid = Instance.new("Frame")
-ButtonsGrid.BackgroundTransparency = 1
-ButtonsGrid.Size = UDim2.new(1, -20, 0, 80)
-ButtonsGrid.LayoutOrder = 2
-ButtonsGrid.Parent = ConfigPanel
-
-local GridLayout = Instance.new("UIGridLayout", ButtonsGrid)
-GridLayout.CellSize = UDim2.fromOffset(150, 22)
-GridLayout.CellPadding = UDim2.fromOffset(10, 6)
-GridLayout.FillDirection = Enum.FillDirection.Horizontal
-GridLayout.SortOrder = Enum.SortOrder.LayoutOrder
-
-local LoadConfigBtn = createButton(ButtonsGrid, "Load config")
-local OverwriteBtn = createButton(ButtonsGrid, "Overwrite config")
-local DeleteBtn = createButton(ButtonsGrid, "Delete config")
-local RefreshBtn = createButton(ButtonsGrid, "Refresh list")
-local SetAutoBtn = createButton(ButtonsGrid, "Set as autoload")
-local ResetAutoBtn = createButton(ButtonsGrid, "Reset autoload")
-
-local AutoLabel = Instance.new("TextLabel")
-AutoLabel.BackgroundTransparency = 1
-AutoLabel.Size = UDim2.new(1, -20, 0, 20)
-AutoLabel.LayoutOrder = 2
-AutoLabel.Font = Enum.Font.Code
-AutoLabel.Text = "Current autoload config: sanity_default"
-AutoLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
-AutoLabel.TextSize = 13
-AutoLabel.TextXAlignment = Enum.TextXAlignment.Left
-AutoLabel.Parent = ConfigPanel
-
---------------------------------------------------
--- LOCAL CONFIG SYSTEM (files)
---------------------------------------------------
-
-local CONFIG_DIR = "sanity_configs"
-local Configs = {}
-local CurrentAutoload = "sanity_default"
-
-local function safeWrite(path, data)
-    local ok, err = pcall(function()
-        if writefile then
-            writefile(path, data)
-        end
-    end)
-    return ok, err
-end
-
-local function safeRead(path)
-    if not isfile or not isfile(path) then return nil end
-    local ok, result = pcall(function()
-        return readfile(path)
-    end)
-    if ok then
-        return result
-    end
-    return nil
-end
-
-local function listConfigFiles()
-    local names = {}
-    if listfiles then
-        local ok, files = pcall(function()
-            return listfiles(CONFIG_DIR)
-        end)
-        if ok and files then
-            for _, f in ipairs(files) do
-                local name = f:match("([^/\\]+)%.json$")
-                if name then
-                    table.insert(names, name)
-                end
-            end
-        end
-    end
-    return names
-end
-
-local function refreshConfigList()
-    local names = listConfigFiles()
-    table.sort(names)
-    if #names == 0 then
-        ListDropdown.Text = "---"
-    else
-        ListDropdown.Text = names[1]
-    end
-end
-
-local function getCurrentConfigTable()
-    return {
-        ShowWatermark = ToggleWatermark.Get(),
-        CustomCursor = ToggleCursor.Get(),
-        NotificationSide = DropdownNotifSide.Text,
-        DPIScale = SliderDPI.Get(),
-        HitboxEnabled = nil, -- filled later
-        HitboxOthersOnly = nil,
-    }
-end
-
-local function applyConfigTable(tbl)
-    if tbl.ShowWatermark ~= nil then
-        ToggleWatermark.Set(tbl.ShowWatermark)
-    end
-    if tbl.CustomCursor ~= nil then
-        ToggleCursor.Set(tbl.CustomCursor)
-    end
-    if tbl.NotificationSide then
-        DropdownNotifSide.Text = tbl.NotificationSide
-    end
-    if tbl.DPIScale ~= nil then
-        SliderDPI.Set(tbl.DPIScale)
-        UIScale.Scale = 0.75 + tbl.DPIScale * 0.75
-    end
-end
-
-local function saveConfig(name)
-    if name == "" then name = "config_" .. tostring(os.time()) end
-    local path = CONFIG_DIR .. "/" .. name .. ".json"
-    local data = getCurrentConfigTable()
-    local encoded = HttpService:JSONEncode(data)
-    safeWrite(path, encoded)
-    refreshConfigList()
-    ListDropdown.Text = name
-end
-
-local function loadConfig(name)
-    local path = CONFIG_DIR .. "/" .. name .. ".json"
-    local raw = safeRead(path)
-    if not raw then return end
-    local ok, decoded = pcall(function()
-        return HttpService:JSONDecode(raw)
-    end)
-    if ok and decoded then
-        applyConfigTable(decoded)
-    end
-end
-
-CreateBtn.MouseButton1Click:Connect(function()
-    local name = NameBox.Text:gsub("%s+", "")
-    if name == "" then
-        name = "config_" .. tostring(os.time())
-    end
-    saveConfig(name)
-end)
-
-RefreshBtn.MouseButton1Click:Connect(function()
-    refreshConfigList()
-end)
-
-SetAutoBtn.MouseButton1Click:Connect(function()
-    if ListDropdown.Text ~= "---" then
-        CurrentAutoload = ListDropdown.Text
-        AutoLabel.Text = "Current autoload config: " .. CurrentAutoload
-    end
-end)
-
-ResetAutoBtn.MouseButton1Click:Connect(function()
-    CurrentAutoload = "sanity_default"
-    AutoLabel.Text = "Current autoload config: sanity_default"
-end)
-
-DeleteBtn.MouseButton1Click:Connect(function()
-    local name = ListDropdown.Text
-    if name ~= "---" then
-        local path = CONFIG_DIR .. "/" .. name .. ".json"
-        if delfile then
-            pcall(function()
-                delfile(path)
-            end)
-        end
-        refreshConfigList()
-    end
-end)
-
-LoadConfigBtn.MouseButton1Click:Connect(function()
-    local name = ListDropdown.Text
-    if name ~= "---" then
-        loadConfig(name)
-    end
-end)
-
-OverwriteBtn.MouseButton1Click:Connect(function()
-    local name = ListDropdown.Text
-    if name ~= "---" then
-        saveConfig(name)
-    end
-end)
-
-refreshConfigList()
-loadConfig("sanity_default")
---------------------------------------------------
--- COMBAT PAGE: HITBOX DEBUG TOOLS
---------------------------------------------------
-
-local CombatList = Instance.new("UIListLayout", CombatPage)
-CombatList.Padding = UDim.new(0, 6)
-CombatList.FillDirection = Enum.FillDirection.Vertical
-CombatList.HorizontalAlignment = Enum.HorizontalAlignment.Left
-CombatList.VerticalAlignment = Enum.VerticalAlignment.Top
-CombatList.SortOrder = Enum.SortOrder.LayoutOrder
-
-local CombatTitle = Instance.new("TextLabel")
-CombatTitle.BackgroundTransparency = 1
-CombatTitle.Position = UDim2.fromOffset(10, 4)
-CombatTitle.Size = UDim2.new(1, -20, 0, 20)
-CombatTitle.Font = Enum.Font.Code
-CombatTitle.Text = "Combat"
-CombatTitle.TextColor3 = Color3.fromRGB(230, 230, 230)
-CombatTitle.TextSize = 16
-CombatTitle.TextXAlignment = Enum.TextXAlignment.Left
-CombatTitle.Parent = CombatPage
-CombatTitle.LayoutOrder = 0
-
-local CombatLine = Instance.new("Frame")
-CombatLine.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-CombatLine.BorderSizePixel = 0
-CombatLine.Position = UDim2.fromOffset(10, 24)
-CombatLine.Size = UDim2.new(1, -20, 0, 1)
-CombatLine.Parent = CombatPage
-CombatLine.LayoutOrder = 1
-
-local HitboxToggle = createToggle(CombatPage, "Hitbox debug")
-local HitboxOthersOnlyToggle = createToggle(CombatPage, "Hitbox on other players only")
-
---------------------------------------------------
--- VISUALS PAGE (placeholder, fits inside box)
---------------------------------------------------
-
-local VisualsList = Instance.new("UIListLayout", VisualsPage)
-VisualsList.Padding = UDim.new(0, 6)
-VisualsList.FillDirection = Enum.FillDirection.Vertical
-VisualsList.HorizontalAlignment = Enum.HorizontalAlignment.Left
-VisualsList.VerticalAlignment = Enum.VerticalAlignment.Top
-VisualsList.SortOrder = Enum.SortOrder.LayoutOrder
-
-local VisualsTitle = Instance.new("TextLabel")
-VisualsTitle.BackgroundTransparency = 1
-VisualsTitle.Position = UDim2.fromOffset(10, 4)
-VisualsTitle.Size = UDim2.new(1, -20, 0, 20)
-VisualsTitle.Font = Enum.Font.Code
-VisualsTitle.Text = "Visuals"
-VisualsTitle.TextColor3 = Color3.fromRGB(230, 230, 230)
-VisualsTitle.TextSize = 16
-VisualsTitle.TextXAlignment = Enum.TextXAlignment.Left
-VisualsTitle.Parent = VisualsPage
-VisualsTitle.LayoutOrder = 0
-
-local VisualsLine = Instance.new("Frame")
-VisualsLine.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-VisualsLine.BorderSizePixel = 0
-VisualsLine.Position = UDim2.fromOffset(10, 24)
-VisualsLine.Size = UDim2.new(1, -20, 0, 1)
-VisualsLine.Parent = VisualsPage
-VisualsLine.LayoutOrder = 1
-
-local VisualsInfo = Instance.new("TextLabel")
-VisualsInfo.BackgroundTransparency = 1
-VisualsInfo.Size = UDim2.new(1, -20, 0, 20)
-VisualsInfo.Font = Enum.Font.Code
-VisualsInfo.Text = "Add visual options here."
-VisualsInfo.TextColor3 = Color3.fromRGB(200, 200, 200)
-VisualsInfo.TextSize = 14
-VisualsInfo.TextXAlignment = Enum.TextXAlignment.Left
-VisualsInfo.Parent = VisualsPage
-VisualsInfo.LayoutOrder = 2
-
---------------------------------------------------
--- HITBOX DEBUG IMPLEMENTATION (default Roblox hitboxes)
---------------------------------------------------
-
-local HitboxBoxes = {}
-
-local function clearHitboxes()
-    for plr, boxes in pairs(HitboxBoxes) do
-        for _, box in ipairs(boxes) do
-            box:Destroy()
-        end
-    end
-    HitboxBoxes = {}
-end
-
-local function createHitboxesForCharacter(char)
-    local boxes = {}
-    for _, part in ipairs(char:GetDescendants()) do
-        if part:IsA("BasePart") then
-            local sb = Instance.new("SelectionBox")
-            sb.Adornee = part
-            sb.LineThickness = 0.03
-            sb.Color3 = Color3.fromRGB(0, 255, 0)
-            sb.SurfaceColor3 = Color3.fromRGB(0, 255, 0)
-            sb.SurfaceTransparency = 0.8
-            sb.Parent = ROOT
-            table.insert(boxes, sb)
-        end
-    end
-    return boxes
-end
-
-local function updateHitboxes()
-    clearHitboxes()
-    if not HitboxToggle.Get() then return end
-
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if HitboxOthersOnlyToggle.Get() and plr == LOCAL_PLAYER then
-            -- skip local
-        else
-            local char = plr.Character
-            if char then
-                HitboxBoxes[plr] = createHitboxesForCharacter(char)
-            end
-        end
-    end
-end
-
-HitboxToggle.Set(false)
-HitboxOthersOnlyToggle.Set(true)
-
-HitboxToggle.Set = (function(old)
-    return function(v)
-        old(v)
-        updateHitboxes()
-    end
-end)(HitboxToggle.Set)
-
-HitboxOthersOnlyToggle.Set = (function(old)
-    return function(v)
-        old(v)
-        updateHitboxes()
-    end
-end)(HitboxOthersOnlyToggle.Set)
-
-Players.PlayerAdded:Connect(function(plr)
-    plr.CharacterAdded:Connect(function()
-        updateHitboxes()
-    end)
-end)
-
-Players.PlayerRemoving:Connect(function()
-    updateHitboxes()
-end)
-
---------------------------------------------------
--- TAB LOGIC
---------------------------------------------------
-
-local function setActiveTab(tabName)
-    for name, btn in pairs(Tabs) do
-        if name == tabName then
-            btn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-        else
-            btn.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
-        end
-    end
-
-    CombatPage.Visible = (tabName == "Combat")
-    VisualsPage.Visible = (tabName == "Visuals")
-    PlayerModsPage.Visible = (tabName == "Player Mods")
-    UISettingsPage.Visible = (tabName == "UI Settings")
-end
-
-for name, btn in pairs(Tabs) do
-    btn.MouseButton1Click:Connect(function()
-        setActiveTab(name)
-    end)
-end
-
-setActiveTab("UI Settings")
-
---------------------------------------------------
--- MENU TOGGLE KEYBIND
---------------------------------------------------
-
-local open = true
-local function setVisible(state)
-    open = state
-    MainFrame.Visible = open
-end
-
-UserInputService.InputBegan:Connect(function(input, gpe)
-    if gpe then return end
-    if input.KeyCode == Enum.KeyCode.RightShift then
-        setVisible(not open)
-    end
-end)
---------------------------------------------------
--- TRANSITION: Loader -> Main UI
---------------------------------------------------
-
-local function tweenTransparency(frame, target, duration)
-    for _, obj in ipairs(frame:GetDescendants()) do
-        if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
-            TweenService:Create(
-                obj,
-                TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-                {TextTransparency = target}
-            ):Play()
-        elseif obj:IsA("Frame") or obj:IsA("ImageLabel") or obj:IsA("ImageButton") then
-            TweenService:Create(
-                obj,
-                TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-                {BackgroundTransparency = target}
-            ):Play()
-        end
-    end
-    TweenService:Create(
-        frame,
-        TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-        {BackgroundTransparency = target}
-    ):Play()
-end
-
-LoadBtn.MouseButton1Click:Connect(function()
-    if not selectedOption then
-        LoaderStatus.Text = "Error: Assign a build target first."
-        LoaderStatus.TextColor3 = Color3.fromRGB(255, 80, 80)
-        return
-    end
-
-    if KeyBox.Text == CORRECT_KEY then
-        LoaderStatus.Text = "Success: Module compiling..."
-        LoaderStatus.TextColor3 = Color3.fromRGB(120, 255, 120)
-
-        task.wait(0.4)
-
-        -- Fade out loader
-        tweenTransparency(LoaderFrame, 1, 0.4)
-        task.wait(0.45)
-        LoaderFrame.Visible = false
-
-        -- Show + fade in main UI
-        MainFrame.Visible = true
-        for _, obj in ipairs(MainFrame:GetDescendants()) do
-            if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
-                obj.TextTransparency = 1
-            elseif obj:IsA("Frame") or obj:IsA("ImageLabel") or obj:IsA("ImageButton") then
-                obj.BackgroundTransparency = 1
-            end
-        end
-        MainFrame.BackgroundTransparency = 1
-
-        tweenTransparency(MainFrame, 0, 0.4)
-    else
-        LoaderStatus.Text = "Error: Invalid token string. Discover via discord.gg/j3tRy9meTy"
-        LoaderStatus.TextColor3 = Color3.fromRGB(255, 80, 80)
-    end
-end)
-
--- Ensure watermark respects DPI scale but keeps fixed pixel size
-SliderDPI.Set(SliderDPI.Get())
-UIScale.Scale = 0.75 + SliderDPI.Get() * 0.75
-
--- Done.
+local function makeSlider(parent, text, default)
+    local f = Instance.new("Frame", parent)
+    f.BackgroundTransparency = 1
+    f.Size = UDim2.new(1,-20,0,32)
+
+    local l = Instance.new("TextLabel", f)
+    l.BackgroundTransparency = 1
+    l.Size = UDim2.new(1,0,0
