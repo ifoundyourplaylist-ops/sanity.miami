@@ -1,3125 +1,1075 @@
---// sanity.miami | Loader + Main UI (16:9 full-height, pure black theme, smooth transition)
-
-local Players = game:GetService("Players")
-local TweenService = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService")
-local CoreGui = game:GetService("CoreGui")
-local HttpService = game:GetService("HttpService")
-local RunService = game:GetService("RunService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-local LOCAL_PLAYER = Players.LocalPlayer
-
--- Destroy old
-local old = CoreGui:FindFirstChild("sanity.miami_Root")
-if old then old:Destroy() end
-
-local ROOT = Instance.new("ScreenGui")
-ROOT.Name = "sanity.miami_Root"
-ROOT.ResetOnSpawn = false
-ROOT.IgnoreGuiInset = true
-ROOT.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-ROOT.Parent = CoreGui
-
--- Fullscreen container
-local FullContainer = Instance.new("Frame")
-FullContainer.Name = "FullContainer"
-FullContainer.BackgroundTransparency = 1
-FullContainer.Size = UDim2.fromScale(1, 1)
-FullContainer.Position = UDim2.fromScale(0, 0)
-FullContainer.Parent = ROOT
-
--- 16:9 container (dominant height)
-local AspectContainer = Instance.new("Frame")
-AspectContainer.Name = "AspectContainer"
-AspectContainer.AnchorPoint = Vector2.new(0.5, 0.5)
-AspectContainer.Position = UDim2.fromScale(0.5, 0.5)
-AspectContainer.Size = UDim2.fromScale(1, 1)
-AspectContainer.BackgroundTransparency = 1
-AspectContainer.Parent = FullContainer
-
-local AspectConstraint = Instance.new("UIAspectRatioConstraint")
-AspectConstraint.AspectRatio = 16/9 [cite: 2]
-AspectConstraint.DominantAxis = Enum.DominantAxis.Height
-AspectConstraint.Parent = AspectContainer
-
--- UIScale for global scaling
-local UIScale = Instance.new("UIScale")
-UIScale.Scale = 1
-UIScale.Parent = AspectContainer
-
---------------------------------------------------
--- CONFIG SYSTEM (local file-based)
---------------------------------------------------
-
-local CONFIG_FOLDER = "sanity.miami/configs"
-local DEFAULT_CONFIG_NAME = "sanity_default"
-local DEFAULT_CONFIG_PATH = CONFIG_FOLDER .. "/" .. DEFAULT_CONFIG_NAME .. ".json"
-local AUTOLOAD_PATH = CONFIG_FOLDER .. "/autoload.txt"
-
-local CurrentConfigName = DEFAULT_CONFIG_NAME
-local CurrentConfig = {
-    Menu = {
-        ShowWatermark = true,
-        CustomCursor = false,
-        NotificationSide = "Right",
-        DPIScale = 1,
-        MenuBind = "RightShift", [cite: 3]
+--[[
+	WARNING: Heads up! This script has not been verified by ScriptBlox. Use at your own risk!
+]]
+shared.Accuracy = {
+    ['Settings'] = {
+        ['Target Aim'] = true,
+        ['Knock Check'] = true,
+        ['Visible Check'] = false,
     },
-    Combat = {
-        HitboxOutlines = false,
-        ImpactMarkers = false,
-        HitLog = true,
+    ['Keybinds'] = {
+        ['Target Lock'] = {
+            ['Key'] = 'E',
+            ['Mode'] = 'Toggle',
+        },
+        ['Trigger Bot'] = {
+            ['Key'] = 'T',
+            ['Mode'] = 'Toggle',
+        },
+        ['Speed'] = 'Q',
+        ['ESP'] = '',
+        ['Super Jump'] = 'V',  -- Super jump toggle key
     },
-    Theme = {
-        BackgroundColor = {0.00, 0.00, 0.00}, -- Updated to pure black
-        MainColor       = {0.02, 0.02, 0.02}, -- Updated to deep pure black
-        AccentColor     = {1, 1, 1},
-        OutlineColor    = {0.15, 0.15, 0.15}, -- Updated to dark subtle outline [cite: 4]
-        FontColor       = {0.9, 0.9, 0.9},
-        FontFace        = "Code",
+    ['FOV'] = {
+        ['Enabled'] = false,
+        ['Visible'] = true,
+        ['Size'] = Vector2.new(2000, 2000),
+        ['Thickness'] = 2,
+        ['Color'] = Color3.fromRGB(255, 255, 255),
+    },
+    ['Silent Aim'] = {
+        ['Enabled'] = true,
+        ['Hit Part'] = 'Head',
+        ['Use Prediction'] = false,
+        ['Prediction'] = {
+            ['X'] = 0,
+            ['Y'] = 0,
+            ['Z'] = 0,
+        },
+    },
+    ['Camera Lock'] = {
+        ['Enabled'] = false,
+        ['Hit Part'] = 'Closest Part',
+        ['Smoothing'] = 40,
+        ['Use Prediction'] = true,
+        ['Prediction'] = 0.133,
+    },
+    ['Trigger Bot'] = {
+        ['Enabled'] = true,
+        ['Delay'] = 0.10,
+        ['Specific Weapons'] = {
+            ['Enabled'] = false,
+            ['Weapons'] = {
+                '[Double-Barrel SG]',
+                '[Revolver]',
+                '[TacticalShotgun]',
+            },
+        },
+    },
+    ['Spread'] = {
+        ['Enabled'] = true,
+        ['Amount'] = 26,
+        ['Specific Weapons'] = {
+            ['Enabled'] = true,
+            ['Weapons'] = {
+                '[Double-Barrel SG]',
+                '[TacticalShotgun]',
+            },
+        },
+    },
+    ['Speed'] = {
+        ['Enabled'] = true,
+        ['Multiplier'] = 40,
+        ['Anti Fling'] = false,
+    },
+    ['Hitbox Expander'] = {
+        ['Enabled'] = true,
+        ['Size'] = 5,
+    },
+    ['Spiderman'] = {
+        ['Enabled'] = false,
+    },
+    ['Visual Awareness'] = {
+        ['Enabled'] = true,
+        ['Color'] = Color3.fromRGB(50, 205, 50),
+        ['Target Color'] = Color3.fromRGB(102, 000, 000),
+    },
+    ['Super Jump'] = {
+        ['Enabled'] = true,
+        ['Power'] = 260,   -- Higher = bigger jump (try 200–300 for crazy height)
+        ['Cooldown'] = 0.1,
+    },
+	    ['Infinite Range'] = {
+        ['Enabled'] = true,
+        ['Key'] = 'N',          -- Press N to toggle
+        ['Max Range'] = 77777,   -- studs (5000+ = basically infinite)
+    },
+	    ['Rapid Fire'] = {
+        ['Enabled'] = false,
+        ['Delay'] = 15.0,  -- lower = faster (0.01–0.1 range is good, 0.05 is balanced)
+        ['Specific Weapons'] = {
+            ['Enabled'] = false,
+            ['Weapons'] = {
+                '[Revolver]',
+                '[Double-Barrel SG]',
+            },
+        },
     },
 }
 
-local function ensureFolder(path)
-    if not isfolder(path) then
-        makefolder(path)
+local Config = shared.Accuracy
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local Camera = Workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
+
+local currentTarget = nil
+local isLocking = false
+local triggerEnabled = false
+local fovBox = nil
+local espLabels = {}
+local SpeedEnabled = false
+local BaseSpeed = 16
+local lastVisibleTarget = nil
+local lastTriggerClick = 0
+local superJumpActive = false
+
+-- Elastic & Sine functions
+local function elasticOut(t)
+    local p = 0.3
+    return math.pow(2, -10 * t) * math.sin((t - p / 4) * (2 * math.pi) / p) + 1
+end
+
+local function sineInOut(t)
+    return -(math.cos(math.pi * t) - 1) / 2
+end
+
+-- Knock checks
+local function isPlayerKnockedOrKO(player)
+    if not Config['Settings']['Knock Check'] then return false end
+    
+    if player.Character then
+        local bodyEffects = player.Character:FindFirstChild("BodyEffects")
+        if bodyEffects then
+            local ko = bodyEffects:FindFirstChild("K.O")
+            if ko and ko.Value == true then return true end
+            
+            local knocked = bodyEffects:FindFirstChild("Knocked")
+            if knocked and knocked.Value == true then return true end
+        end
     end
+    
+    return false
 end
 
-local function saveConfig(name)
-    ensureFolder(CONFIG_FOLDER)
-    name = name or CurrentConfigName
-    local path = CONFIG_FOLDER .. "/" .. name .. ".json" [cite: 5]
-    writefile(path, HttpService:JSONEncode(CurrentConfig))
-end
-
-local function loadConfig(name)
-    ensureFolder(CONFIG_FOLDER)
-    name = name or CurrentConfigName
-    local path = CONFIG_FOLDER .. "/" .. name .. ".json"
-    if isfile(path) then
-        local ok, data = pcall(function()
-            return HttpService:JSONDecode(readfile(path))
-        end)
-        if ok and type(data) == "table" then
-            CurrentConfig = data
-            CurrentConfigName = name [cite: 6]
-            return true
+local function isSelfKnocked()
+    if LocalPlayer.Character then
+        local bodyEffects = LocalPlayer.Character:FindFirstChild("BodyEffects")
+        if bodyEffects then
+            local ko = bodyEffects:FindFirstChild("K.O")
+            if ko and ko.Value == true then return true end
+            
+            local knocked = bodyEffects:FindFirstChild("Knocked")
+            if knocked and knocked.Value == true then return true end
         end
     end
     return false
 end
 
-local function listConfigs()
-    ensureFolder(CONFIG_FOLDER)
-    local files = listfiles(CONFIG_FOLDER)
-    local names = {}
-    for _, f in ipairs(files) do
-        local n = f:match("([^/\\]+)%.json$")
-        if n and n ~= "autoload" then
-            table.insert(names, n) [cite: 7]
-        end
+-- ULTIMATE AIR SILENT FIX (forces silent override during air/jump - 100% hits)
+-- Issue: Even with bypass, FOV/vis checks or target loss block Mouse.Hit override mid-air
+
+-- 1. REPLACE your canSeeTarget (forced air bypass for LOCKED targets)
+local function canSeeTarget(part)
+    if not Config['Settings']['Visible Check'] then return true end
+    
+    if not part or not part.Parent then return false end
+    
+    local character = part.Parent
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return false end
+    
+    -- FORCE BYPASS for AIRBORNE + LOCKED (ignores ray completely)
+    local state = humanoid:GetState()
+    local isAirborne = (state == Enum.HumanoidStateType.Jumping or 
+                        state == Enum.HumanoidStateType.Freefall or 
+                        state == Enum.HumanoidStateType.FallingDown)
+    
+    local root = character:FindFirstChild("HumanoidRootPart")
+    local velY = root and math.abs((root.AssemblyLinearVelocity or root.Velocity or Vector3.new()).Y) or 0
+    
+    if (isAirborne or velY > 8) and isLocking then  -- ← KEY: Only if LOCKED (C pressed)
+        return true
     end
-    table.sort(names)
-    return names
+    
+    -- Ground fallback ray (your existing logic)
+    local origin = Camera.CFrame.Position
+    local direction = (part.Position - origin).Unit * (part.Position - origin).Magnitude
+    
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, character}
+    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+    raycastParams.IgnoreWater = true
+    
+    local rayResult = Workspace:Raycast(origin, direction, raycastParams)
+    return rayResult == nil or rayResult.Instance:IsDescendantOf(character)
 end
 
-local function saveAutoload(name)
-    ensureFolder(CONFIG_FOLDER)
-    if name then
-        writefile(AUTOLOAD_PATH, name)
-    elseif isfile(AUTOLOAD_PATH) then
-        delfile(AUTOLOAD_PATH)
-    end
-end
-
-local function loadAutoload()
-    if isfile(AUTOLOAD_PATH) then
-        local name = readfile(AUTOLOAD_PATH)
-        if name and name ~= "" then [cite: 8]
-            return name
-        end
-    end
-    return nil
-end
-
--- First run: load autoload or default
-local autoloadName = loadAutoload()
-if autoloadName and loadConfig(autoloadName) then
-    -- loaded autoload
-elseif isfile(DEFAULT_CONFIG_PATH) then
-    loadConfig(DEFAULT_CONFIG_NAME)
-else
-    saveConfig(DEFAULT_CONFIG_NAME)
-end
---------------------------------------------------
--- LOADER UI
---------------------------------------------------
-
-local CORRECT_KEY = ".gg/sanitybleh"
-
-local LoaderFrame = Instance.new("Frame")
-LoaderFrame.Name = "LoaderFrame"
-LoaderFrame.Size = UDim2.fromScale(0.55, 0.5)
-LoaderFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-LoaderFrame.Position = UDim2.fromScale(0.5, 0.5)
-LoaderFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0) -- All Black [cite: 8]
-LoaderFrame.BorderSizePixel = 0
-LoaderFrame.Parent = AspectContainer
-
-local LoaderCorner = Instance.new("UICorner", LoaderFrame)
-LoaderCorner.CornerRadius = UDim.new(0, 12)
-
-local LoaderStroke = Instance.new("UIStroke", LoaderFrame) [cite: 9]
-LoaderStroke.Color = Color3.fromRGB(30, 30, 30) -- Dark Border
-LoaderStroke.Thickness = 1
-
--- Dragging loader
-do
-    local dragging, dragStart, startPos
-    LoaderFrame.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true
-            dragStart = input.Position
-            startPos = LoaderFrame.Position
-        end
-    end)
-    LoaderFrame.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then [cite: 10]
-            dragging = false
-        end
-    end)
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-            local delta = input.Position - dragStart
-            LoaderFrame.Position = UDim2.new(
-                startPos.X.Scale,
-                startPos.X.Offset + delta.X, [cite: 11]
-                startPos.Y.Scale,
-                startPos.Y.Offset + delta.Y
-            )
-        end
-    end)
-end
-
--- Loader title
-local LoaderTitle = Instance.new("TextLabel")
-LoaderTitle.BackgroundTransparency = 1
-LoaderTitle.Position = UDim2.fromScale(0.06, 0.08)
-LoaderTitle.Size = UDim2.fromOffset(250, 30)
-LoaderTitle.Font = Enum.Font.Code
-LoaderTitle.Text = "sanity.miami"
-LoaderTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-LoaderTitle.TextSize = 24
-LoaderTitle.TextXAlignment = Enum.TextXAlignment.Left
-LoaderTitle.Parent = LoaderFrame
-
--- Close button
-local LoaderClose = Instance.new("TextButton") [cite: 12]
-LoaderClose.BackgroundTransparency = 1
-LoaderClose.Size = UDim2.fromOffset(32, 32)
-LoaderClose.Position = UDim2.fromScale(0.91, 0.06)
-LoaderClose.Font = Enum.Font.Code
-LoaderClose.Text = "✕"
-LoaderClose.TextColor3 = Color3.fromRGB(160, 160, 160)
-LoaderClose.TextSize = 18
-LoaderClose.Parent = LoaderFrame
-
-LoaderClose.MouseButton1Click:Connect(function()
-    ROOT:Destroy()
-end)
-
--- Universal selection frame
-local UniversalFrame = Instance.new("Frame")
-UniversalFrame.Name = "Universal"
-UniversalFrame.BackgroundColor3 = Color3.fromRGB(5, 5, 5) -- All Black
-UniversalFrame.BorderSizePixel = 0
-UniversalFrame.Position = UDim2.fromScale(0.06, 0.26)
-UniversalFrame.Size = UDim2.fromScale(0.88, 0.16)
-UniversalFrame.Parent = LoaderFrame
-
-local UniversalCorner = Instance.new("UICorner", UniversalFrame)
-UniversalCorner.CornerRadius = UDim.new(0, 8)
-
-local UniversalStroke = Instance.new("UIStroke", UniversalFrame)
-UniversalStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-UniversalStroke.Color = Color3.fromRGB(40, 40, 40) -- Dark Border
-UniversalStroke.Thickness = 1
-
-local UniversalLabel = Instance.new("TextLabel")
-UniversalLabel.BackgroundTransparency = 1
-UniversalLabel.Position = UDim2.fromScale(0.05, 0)
-UniversalLabel.Size = UDim2.new(0.9, 0, 1, 0)
-UniversalLabel.Font = Enum.Font.Code
-UniversalLabel.Text = "Universal Script"
-UniversalLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
-UniversalLabel.TextSize = 16
-UniversalLabel.TextXAlignment = Enum.TextXAlignment.Left
-UniversalLabel.Parent = UniversalFrame
-
--- Key box
-local KeyBox = Instance.new("TextBox")
-KeyBox.Name = "KeyTextBox" [cite: 13]
-KeyBox.BackgroundColor3 = Color3.fromRGB(0, 0, 0) -- Pure Black [cite: 13]
-KeyBox.BorderSizePixel = 0
-KeyBox.Position = UDim2.fromScale(0.06, 0.48)
-KeyBox.Size = UDim2.fromScale(0.88, 0.14)
-KeyBox.Font = Enum.Font.Code
-KeyBox.PlaceholderText = "discord.gg/j3tRy9meTy"
-KeyBox.Text = ""
-KeyBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-KeyBox.PlaceholderColor3 = Color3.fromRGB(80, 80, 80)
-KeyBox.TextSize = 15
-KeyBox.TextXAlignment = Enum.TextXAlignment.Left
-KeyBox.Parent = LoaderFrame
-
-local KeyCorner = Instance.new("UICorner", KeyBox)
-KeyCorner.CornerRadius = UDim.new(0, 8)
-
-local KeyStroke = Instance.new("UIStroke", KeyBox)
-KeyStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-KeyStroke.Color = Color3.fromRGB(30, 30, 30) -- Dark Border
-KeyStroke.Thickness = 1
-
--- Status label
-local LoaderStatus = Instance.new("TextLabel")
-LoaderStatus.Name = "StatusLabel"
-LoaderStatus.BackgroundTransparency = 1
-LoaderStatus.Position = UDim2.fromScale(0.06, 0.66)
-LoaderStatus.Size = UDim2.fromScale(0.88, 0.08)
-LoaderStatus.Font = Enum.Font.Code
-LoaderStatus.Text = "Status: Pending Activation"
-LoaderStatus.TextColor3 = Color3.fromRGB(140, 140, 140)
-LoaderStatus.TextSize = 14
-LoaderStatus.TextXAlignment = Enum.TextXAlignment.Left
-LoaderStatus.Parent = LoaderFrame
-
--- Execute button
-local LoadBtn = Instance.new("TextButton")
-LoadBtn.Name = "Loadbtn"
-LoadBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 20) -- Dark theme execution btn [cite: 14]
-LoadBtn.BorderSizePixel = 0
-LoadBtn.Position = UDim2.fromScale(0.06, 0.78)
-LoadBtn.Size = UDim2.fromScale(0.88, 0.16) [cite: 14]
-LoadBtn.Font = Enum.Font.Code
-LoadBtn.Text = "Execute Layout"
-LoadBtn.TextColor3 = Color3.fromRGB(240, 240, 240) -- White text on dark button [cite: 14]
-LoadBtn.TextSize = 16
-LoadBtn.Parent = LoaderFrame
-
-local LoadCorner = Instance.new("UICorner", LoadBtn)
-LoadCorner.CornerRadius = UDim.new(0, 8)
-
-local selectedOption = nil
-local selectedColor = Color3.fromRGB(255, 255, 255)
-local defaultColor = Color3.fromRGB(40, 40, 40)
-
-local function selectScript(scriptFrame, scriptName)
-    UniversalStroke.Color = defaultColor
-    if scriptFrame then
-        scriptFrame:FindFirstChildOfClass("UIStroke").Color = selectedColor
-        selectedOption = scriptName
-        LoaderStatus.Text = "Status: Ready to process [" .. scriptName .. "]"
-        LoaderStatus.TextColor3 = Color3.fromRGB(230, 230, 230)
-    else [cite: 15]
-        selectedOption = nil
-        LoaderStatus.Text = "Status: Pending Activation"
-        LoaderStatus.TextColor3 = Color3.fromRGB(140, 140, 140)
-    end
-end
-
-UniversalFrame.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        selectScript(UniversalFrame, "Universal")
-    end
-end)
-
--- Transition helper
-local function tweenTransparency(frame, target, duration)
-    for _, obj in ipairs(frame:GetDescendants()) do
-        if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
-            TweenService:Create(obj, TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = target}):Play() [cite: 16]
-        elseif obj:IsA("Frame") or obj:IsA("ImageLabel") or obj:IsA("ImageButton") then
-            TweenService:Create(obj, TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = target}):Play()
-        end
-    end
-    TweenService:Create(frame, TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = target}):Play()
-end
---------------------------------------------------
--- MAIN UI (hidden initially)
---------------------------------------------------
-
-local MainFrame = Instance.new("Frame")
-MainFrame.Name = "MainUI"
-MainFrame.Size = UDim2.fromScale(0.8, 0.8)
-MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-MainFrame.Position = UDim2.fromScale(0.5, 0.5)
-MainFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0) -- All Black UI [cite: 17]
-MainFrame.BorderSizePixel = 0
-MainFrame.Visible = false
-MainFrame.Parent = AspectContainer
-
-local MainCorner = Instance.new("UICorner", MainFrame)
-MainCorner.CornerRadius = UDim.new(0, 8)
-
-local MainStroke = Instance.new("UIStroke", MainFrame) [cite: 17]
-MainStroke.Color = Color3.fromRGB(30, 30, 30) -- Dark Border [cite: 17]
-MainStroke.Thickness = 1
-
--- Fixed-size watermark (bottom-center)
-local Watermark = Instance.new("TextLabel")
-Watermark.Name = "Watermark"
-Watermark.BackgroundTransparency = 1
-Watermark.Size = UDim2.fromOffset(300, 20)
-Watermark.AnchorPoint = Vector2.new(0.5, 1)
-Watermark.Position = UDim2.new(0.5, 0, 1, -10)
-Watermark.Font = Enum.Font.Code
-Watermark.Text = "sanity.miami"
-Watermark.TextColor3 = Color3.fromRGB(255, 255, 255) -- Made visible on black background
-Watermark.TextSize = 16
-Watermark.TextTransparency = 0
-Watermark.Visible = false
-Watermark.Parent = AspectContainer
-
--- Dragging main UI
-do
-    local dragging, dragStart, startPos
-    MainFrame.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true
-            dragStart = input.Position
-            startPos = MainFrame.Position [cite: 18]
-        end
-    end)
-    MainFrame.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = false
-        end
-    end)
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-            local delta = input.Position - dragStart [cite: 19]
-            MainFrame.Position = UDim2.new(
-                startPos.X.Scale,
-                startPos.X.Offset + delta.X,
-                startPos.Y.Scale,
-                startPos.Y.Offset + delta.Y
-            )
-        end [cite: 20]
-    end)
-end
-
--- Top bar
-local TopBar = Instance.new("Frame")
-TopBar.Name = "TopBar"
-TopBar.BackgroundColor3 = Color3.fromRGB(5, 5, 5) -- All Black
-TopBar.BorderSizePixel = 0
-TopBar.Size = UDim2.new(1, 0, 0, 32)
-TopBar.Parent = MainFrame
-
-local TopStroke = Instance.new("UIStroke", TopBar)
-TopStroke.Color = Color3.fromRGB(25, 25, 25) -- Dark border
-TopStroke.Thickness = 1
-
-local Title = Instance.new("TextLabel")
-Title.BackgroundTransparency = 1
-Title.Position = UDim2.fromOffset(10, 0)
-Title.Size = UDim2.new(0, 250, 1, 0)
-Title.Font = Enum.Font.Code
-Title.Text = "sanity.miami"
-Title.TextColor3 = Color3.fromRGB(235, 235, 235)
-Title.TextSize = 18
-Title.TextXAlignment = Enum.TextXAlignment.Left
-Title.Parent = TopBar
-
-local Subtitle = Instance.new("TextLabel")
-Subtitle.BackgroundTransparency = 1
-Subtitle.Position = UDim2.fromOffset(10, 18)
-Subtitle.Size = UDim2.new(0, 250, 1, -18)
-Subtitle.Font = Enum.Font.Code
-Subtitle.Text = "Universal"
-Subtitle.TextColor3 = Color3.fromRGB(120, 120, 120)
-Subtitle.TextSize = 12
-Subtitle.TextXAlignment = Enum.TextXAlignment.Left
-Subtitle.Parent = TopBar
-
-local CloseMain = Instance.new("TextButton")
-CloseMain.BackgroundTransparency = 1
-CloseMain.Size = UDim2.fromOffset(24, 24) [cite: 21]
-CloseMain.Position = UDim2.new(1, -30, 0, 4)
-CloseMain.Font = Enum.Font.Code
-CloseMain.Text = "✕"
-CloseMain.TextSize = 18
-CloseMain.TextColor3 = Color3.fromRGB(180, 180, 180)
-CloseMain.Parent = TopBar
-
-CloseMain.MouseButton1Click:Connect(function()
-    ROOT:Destroy()
-end)
-
--- Sidebar
-local Sidebar = Instance.new("Frame")
-Sidebar.Name = "Sidebar"
-Sidebar.BackgroundColor3 = Color3.fromRGB(2, 2, 2) -- All Black [cite: 21]
-Sidebar.BorderSizePixel = 0
-Sidebar.Position = UDim2.fromOffset(0, 32)
-Sidebar.Size = UDim2.new(0, 150, 1, -32)
-Sidebar.Parent = MainFrame
-
-local SidebarStroke = Instance.new("UIStroke", Sidebar)
-SidebarStroke.Color = Color3.fromRGB(25, 25, 25) -- Dark border
-SidebarStroke.Thickness = 1
-
-local TabList = Instance.new("UIListLayout", Sidebar)
-TabList.Padding = UDim.new(0, 4)
-TabList.FillDirection = Enum.FillDirection.Vertical
-TabList.HorizontalAlignment = Enum.HorizontalAlignment.Left
-TabList.VerticalAlignment = Enum.VerticalAlignment.Top
-TabList.SortOrder = Enum.SortOrder.LayoutOrder
-
-local function createTab(name)
-    local btn = Instance.new("TextButton")
-    btn.Name = name
-    btn.Size = UDim2.new(1, -10, 0, 32)
-    btn.Position = UDim2.fromOffset(5, 0)
-    btn.BackgroundColor3 = Color3.fromRGB(5, 5, 5) -- All Black [cite: 22]
-    btn.BorderSizePixel = 0
-    btn.Font = Enum.Font.Code
-    btn.Text = name
-    btn.TextSize = 14
-    btn.TextColor3 = Color3.fromRGB(180, 180, 180)
-    btn.TextXAlignment = Enum.TextXAlignment.Left
-    btn.Parent = Sidebar
-
-    local corner = Instance.new("UICorner", btn)
-    corner.CornerRadius = UDim.new(0, 4)
-
-    return btn
-end
-
-local Tabs = {
-    Combat = createTab("Combat"),
-    Visuals = createTab("Visuals"),
-    ["Player Mods"] = createTab("Player Mods"),
-    ["UI Settings"] = createTab("UI Settings"), [cite: 23]
-}
-
--- Content
-local Content = Instance.new("Frame")
-Content.Name = "Content"
-Content.BackgroundColor3 = Color3.fromRGB(5, 5, 5) -- All Black [cite: 23]
-Content.BorderSizePixel = 0
-Content.Position = UDim2.fromOffset(150, 32)
-Content.Size = UDim2.new(1, -150, 1, -32)
-Content.Parent = MainFrame
-
-local ContentStroke = Instance.new("UIStroke", Content)
-ContentStroke.Color = Color3.fromRGB(25, 25, 25) -- Dark Border
-ContentStroke.Thickness = 1
-
--- Pages
-local UISettingsPage = Instance.new("Frame")
-UISettingsPage.Name = "UISettingsPage"
-UISettingsPage.BackgroundTransparency = 1
-UISettingsPage.Size = UDim2.fromScale(1, 1)
-UISettingsPage.Parent = Content
-
-local CombatPage = Instance.new("Frame")
-CombatPage.Name = "CombatPage"
-CombatPage.BackgroundTransparency = 1
-CombatPage.Size = UDim2.fromScale(1, 1)
-CombatPage.Visible = false
-CombatPage.Parent = Content
-
-local VisualsPage = Instance.new("Frame")
-VisualsPage.Name = "VisualsPage"
-VisualsPage.BackgroundTransparency = 1
-VisualsPage.Size = UDim2.fromScale(1, 1)
-VisualsPage.Visible = false
-VisualsPage.Parent = Content
-
-local PlayerModsPage = Instance.new("Frame")
-PlayerModsPage.Name = "PlayerModsPage"
-PlayerModsPage.BackgroundTransparency = 1
-PlayerModsPage.Size = UDim2.fromScale(1, 1)
-PlayerModsPage.Visible = false
-PlayerModsPage.Parent = Content
-
-local BottomInfo = Instance.new("TextLabel")
-BottomInfo.BackgroundTransparency = 1
-BottomInfo.Size = UDim2.new(1, -20, 0, 18)
-BottomInfo.Position = UDim2.new(0, 10, 1, -22) [cite: 24]
-BottomInfo.Font = Enum.Font.Code
-BottomInfo.Text = "[UP] Just a baseplate."
-BottomInfo.TextColor3 = Color3.fromRGB(100, 100, 100) [cite: 25]
-BottomInfo.TextSize = 12
-BottomInfo.TextXAlignment = Enum.TextXAlignment.Left
-BottomInfo.Parent = Content
---------------------------------------------------
--- UI SETTINGS PAGE
---------------------------------------------------
-
--- Left panel: Menu
-local MenuPanel = Instance.new("Frame")
-MenuPanel.Name = "MenuPanel"
-MenuPanel.BackgroundColor3 = Color3.fromRGB(8, 8, 8) -- All Black [cite: 25]
-MenuPanel.BorderSizePixel = 0
-MenuPanel.Position = UDim2.fromOffset(10, 10)
-MenuPanel.Size = UDim2.new(0.5, -15, 1, -20)
-MenuPanel.Parent = UISettingsPage
-
-local MenuCorner = Instance.new("UICorner", MenuPanel)
-MenuCorner.CornerRadius = UDim.new(0, 6)
-
-local MenuStroke = Instance.new("UIStroke", MenuPanel)
-MenuStroke.Color = Color3.fromRGB(30, 30, 30) -- Dark border [cite: 25]
-MenuStroke.Thickness = 1
-
-local MenuTitle = Instance.new("TextLabel")
-MenuTitle.BackgroundTransparency = 1
-MenuTitle.Position = UDim2.fromOffset(10, 4)
-MenuTitle.Size = UDim2.new(1, -20, 0, 20)
-MenuTitle.Font = Enum.Font.Code
-MenuTitle.Text = "Menu"
-MenuTitle.TextColor3 = Color3.fromRGB(230, 230, 230)
-MenuTitle.TextSize = 16
-MenuTitle.TextXAlignment = Enum.TextXAlignment.Left
-MenuTitle.Parent = MenuPanel
-
-local MenuLine = Instance.new("Frame")
-MenuLine.BackgroundColor3 = Color3.fromRGB(30, 30, 30) -- Dark outline divider [cite: 26]
-MenuLine.BorderSizePixel = 0
-MenuLine.Position = UDim2.fromOffset(10, 24)
-MenuLine.Size = UDim2.new(1, -20, 0, 1)
-MenuLine.Parent = MenuPanel [cite: 26]
-
-local MenuList = Instance.new("UIListLayout", MenuPanel)
-MenuList.Padding = UDim.new(0, 6)
-MenuList.FillDirection = Enum.FillDirection.Vertical
-MenuList.HorizontalAlignment = Enum.HorizontalAlignment.Left
-MenuList.VerticalAlignment = Enum.VerticalAlignment.Top
-MenuList.SortOrder = Enum.SortOrder.LayoutOrder
-
-MenuTitle.LayoutOrder = 0
-MenuLine.LayoutOrder = 1
-
--- Helpers with config binding
-local function createToggle(parent, text, configPath)
-    local container = Instance.new("Frame")
-    container.BackgroundTransparency = 1
-    container.Size = UDim2.new(1, -20, 0, 24)
-    container.LayoutOrder = 2
-    container.Parent = parent
-
-    local label = Instance.new("TextLabel")
-    label.BackgroundTransparency = 1
-    label.Position = UDim2.fromOffset(0, 0)
-    label.Size = UDim2.new(1, -40, 1, 0)
-    label.Font = Enum.Font.Code
-    label.Text = text [cite: 27]
-    label.TextColor3 = Color3.fromRGB(210, 210, 210)
-    label.TextSize = 14
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = container
-
-    local toggle = Instance.new("TextButton")
-    toggle.BackgroundColor3 = Color3.fromRGB(15, 15, 15) -- All Black
-    toggle.BorderSizePixel = 0
-    toggle.Size = UDim2.fromOffset(32, 18)
-    toggle.Position = UDim2.new(1, -32, 0.5, 0)
-    toggle.AnchorPoint = Vector2.new(1, 0.5)
-    toggle.Font = Enum.Font.Code
-    toggle.Text = ""
-    toggle.Parent = container
-
-    local tCorner = Instance.new("UICorner", toggle)
-    tCorner.CornerRadius = UDim.new(1, 0) [cite: 28]
-
-    local knob = Instance.new("Frame")
-    knob.BackgroundColor3 = Color3.fromRGB(180, 180, 180)
-    knob.BorderSizePixel = 0
-    knob.Size = UDim2.fromOffset(14, 14)
-    knob.Position = UDim2.fromOffset(2, 2)
-    knob.Parent = toggle
-
-    local kCorner = Instance.new("UICorner", knob)
-    kCorner.CornerRadius = UDim.new(1, 0)
-
-    local function getConfigRef()
-        local t = CurrentConfig
-        for i = 1, #configPath - 1 do
-            t = t[configPath[i]] [cite: 29]
-        end
-        local key = configPath[#configPath]
-        return t, key
-    end
-
-    local cfgTable, cfgKey = getConfigRef()
-    local state = cfgTable and cfgTable[cfgKey] or false
-
-    local function applyVisual()
-        if state then
-            toggle.BackgroundColor3 = Color3.fromRGB(220, 220, 220)
-            knob.BackgroundColor3 = Color3.fromRGB(0, 0, 0) -- Flipped to true black inside active [cite: 30]
-            knob.Position = UDim2.fromOffset(32 - 14 - 2, 2)
-        else
-            toggle.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-            knob.BackgroundColor3 = Color3.fromRGB(180, 180, 180)
-            knob.Position = UDim2.fromOffset(2, 2)
-        end
-    end
-
-    local function setState(v)
-        state = v [cite: 31]
-        cfgTable, cfgKey = getConfigRef()
-        if cfgTable then
-            cfgTable[cfgKey] = state
-        end
-        applyVisual()
-        saveConfig()
-    end
-
-    toggle.MouseButton1Click:Connect(function()
-        setState(not state)
-    end)
-
-    applyVisual()
-
-    return {
-        Set = setState, [cite: 32]
-        Get = function() return state end,
+-- Closest body part
+local function getClosestBodyPart(character)
+    local closestPart = nil
+    local shortestDist = math.huge
+    
+    local bodyParts = {
+        character:FindFirstChild("Head"),
+        character:FindFirstChild("UpperTorso"),
+        character:FindFirstChild("HumanoidRootPart"),
+        character:FindFirstChild("LowerTorso"),
+        character:FindFirstChild("LeftUpperArm"),
+        character:FindFirstChild("RightUpperArm"),
+        character:FindFirstChild("LeftLowerArm"),
+        character:FindFirstChild("RightLowerArm"),
+        character:FindFirstChild("LeftHand"),
+        character:FindFirstChild("RightHand"),
+        character:FindFirstChild("LeftUpperLeg"),
+        character:FindFirstChild("RightUpperLeg"),
+        character:FindFirstChild("LeftLowerLeg"),
+        character:FindFirstChild("RightLowerLeg"),
+        character:FindFirstChild("LeftFoot"),
+        character:FindFirstChild("RightFoot"),
     }
-end
-
-local function createDropdown(parent, text, default, onChange)
-    local container = Instance.new("Frame")
-    container.BackgroundTransparency = 1
-    container.Size = UDim2.new(1, -20, 0, 24)
-    container.LayoutOrder = 2
-    container.Parent = parent
-
-    local label = Instance.new("TextLabel")
-    label.BackgroundTransparency = 1
-    label.Position = UDim2.fromOffset(0, 0)
-    label.Size = UDim2.new(1, -120, 1, 0)
-    label.Font = Enum.Font.Code
-    label.Text = text [cite: 33]
-    label.TextColor3 = Color3.fromRGB(210, 210, 210)
-    label.TextSize = 14
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = container
-
-    local box = Instance.new("TextButton")
-    box.BackgroundColor3 = Color3.fromRGB(15, 15, 15) -- All Black dropdown asset [cite: 33]
-    box.BorderSizePixel = 0
-    box.Size = UDim2.fromOffset(90, 20)
-    box.Position = UDim2.new(1, -90, 0.5, 0)
-    box.AnchorPoint = Vector2.new(1, 0.5)
-    box.Font = Enum.Font.Code
-    box.Text = default or "---"
-    box.TextSize = 13
-    box.TextColor3 = Color3.fromRGB(220, 220, 220) [cite: 34]
-    box.TextXAlignment = Enum.TextXAlignment.Left
-    box.Parent = container
-
-    local corner = Instance.new("UICorner", box)
-    corner.CornerRadius = UDim.new(0, 3)
-
-    box.MouseButton1Click:Connect(function()
-        if text == "Notification Side" then
-            local new = (box.Text == "Right") and "Left" or "Right"
-            box.Text = new
-            if onChange then onChange(new) end [cite: 35]
+    
+    for _, part in pairs(bodyParts) do
+        if part then
+            local pos, onScreen = Camera:WorldToViewportPoint(part.Position)
+            
+            local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+            local dist = (Vector2.new(pos.X, pos.Y) - screenCenter).Magnitude
+            
+            if dist < shortestDist then
+                shortestDist = dist
+                closestPart = part
+            end
         end
-    end)
-
-    return box
-end
-
-local function createSlider(parent, text, default, onChange)
-    local container = Instance.new("Frame")
-    container.BackgroundTransparency = 1
-    container.Size = UDim2.new(1, -20, 0, 32)
-    container.LayoutOrder = 2
-    container.Parent = parent
-
-    local label = Instance.new("TextLabel")
-    label.BackgroundTransparency = 1
-    label.Position = UDim2.fromOffset(0, 0)
-    label.Size = UDim2.new(1, 0, 0, 16)
-    label.Font = Enum.Font.Code [cite: 36]
-    label.Text = text
-    label.TextColor3 = Color3.fromRGB(210, 210, 210)
-    label.TextSize = 14
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = container
-
-    local bar = Instance.new("Frame")
-    bar.BackgroundColor3 = Color3.fromRGB(20, 20, 20) -- Dark layout slot [cite: 36]
-    bar.BorderSizePixel = 0
-    bar.Position = UDim2.fromOffset(0, 18)
-    bar.Size = UDim2.new(1, -40, 0, 6)
-    bar.Parent = container
-
-    local barCorner = Instance.new("UICorner", bar)
-    barCorner.CornerRadius = UDim.new(1, 0)
-
-    local fill = Instance.new("Frame") [cite: 37]
-    fill.BackgroundColor3 = Color3.fromRGB(220, 220, 220)
-    fill.BorderSizePixel = 0
-    fill.Size = UDim2.new((default or 0), 0, 1, 0)
-    fill.Parent = bar
-
-    local fillCorner = Instance.new("UICorner", fill)
-    fillCorner.CornerRadius = UDim.new(1, 0)
-
-    local valueLabel = Instance.new("TextLabel")
-    valueLabel.BackgroundTransparency = 1
-    valueLabel.Position = UDim2.new(1, -40, 0, 14)
-    valueLabel.Size = UDim2.fromOffset(40, 16)
-    valueLabel.Font = Enum.Font.Code
-    valueLabel.Text = tostring(math.floor((default or 0) * 100)) .. "%"
-    valueLabel.TextColor3 = Color3.fromRGB(180, 180, 180) [cite: 38]
-    valueLabel.TextSize = 12
-    valueLabel.TextXAlignment = Enum.TextXAlignment.Right
-    valueLabel.Parent = container
-
-    local value = default or 0
-
-    local function setFromX(x)
-        local rel = math.clamp((x - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
-        value = rel
-        fill.Size = UDim2.new(rel, 0, 1, 0)
-        valueLabel.Text = tostring(math.floor(rel * 100)) .. "%"
-        if onChange then onChange(rel) end [cite: 39]
     end
+    
+    return closestPart
+end
 
-    bar.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            setFromX(input.Position.X)
+-- FOV check
+local function isMouseInFOV(character)
+    if not Config['FOV']['Enabled'] then return true end
+    if not character then return false end
+    
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    local head = character:FindFirstChild("Head")
+    if not rootPart or not head then return false end
+    
+    local headPos, headOnScreen = Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0))
+    local legPos, legOnScreen = Camera:WorldToViewportPoint(rootPart.Position - Vector3.new(0, 3, 0))
+    
+    if not headOnScreen or not legOnScreen then return false end
+    
+    local height = math.abs(headPos.Y - legPos.Y)
+    local width = height / 2
+    
+    local rootPos = Camera:WorldToViewportPoint(rootPart.Position)
+    
+    local padding = 10
+    local topLeftX = rootPos.X - width/2 - padding
+    local topLeftY = headPos.Y - padding
+    local bottomRightX = rootPos.X + width/2 + padding
+    local bottomRightY = legPos.Y + padding
+    
+    local mousePos = Vector2.new(Mouse.X, Mouse.Y)
+    
+    return mousePos.X >= topLeftX and mousePos.X <= bottomRightX and mousePos.Y >= topLeftY and mousePos.Y <= bottomRightY
+end
+
+-- Find closest target
+local function findClosestTarget()
+    local closestTarget = nil
+    local shortestDistance = math.huge
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            if not isPlayerKnockedOrKO(player) then
+                local targetPart = nil
+                
+                if Config['Silent Aim']['Hit Part'] == 'Closest Part' then
+                    targetPart = getClosestBodyPart(player.Character)
+                else
+                    targetPart = player.Character:FindFirstChild(Config['Silent Aim']['Hit Part'])
+                end
+                
+                if targetPart and canSeeTarget(targetPart) then
+                    local pos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+                    
+                    if isMouseInFOV(player.Character) then
+                        local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+                        local dist = (Vector2.new(pos.X, pos.Y) - screenCenter).Magnitude
+                        
+                        if dist < shortestDistance then
+                            shortestDistance = dist
+                            closestTarget = targetPart
+                        end
+                    end
+                end
+            end
         end
-    end)
-
-    UserInputService.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
-            if bar.AbsolutePosition and bar.AbsoluteSize then
-                setFromX(input.Position.X)
-            end [cite: 40]
-        end
-    end)
-
-    return {
-        Get = function() return value end,
-        Set = function(v)
-            value = math.clamp(v, 0, 1)
-            fill.Size = UDim2.new(value, 0, 1, 0)
-            valueLabel.Text = tostring(math.floor(value * 100)) .. "%"
-            if onChange then onChange(value) end [cite: 41]
-        end,
-    }
+    end
+    
+    return closestTarget
 end
 
-local function createLabelValue(parent, text, value)
-    local container = Instance.new("Frame")
-    container.BackgroundTransparency = 1
-    container.Size = UDim2.new(1, -20, 0, 24)
-    container.LayoutOrder = 2
-    container.Parent = parent
-
-    local label = Instance.new("TextLabel")
-    label.BackgroundTransparency = 1
-    label.Position = UDim2.fromOffset(0, 0)
-    label.Size = UDim2.new(1, -80, 1, 0)
-    label.Font = Enum.Font.Code
-    label.Text = text [cite: 42]
-    label.TextColor3 = Color3.fromRGB(210, 210, 210)
-    label.TextSize = 14
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = container
-
-    local valueLabel = Instance.new("TextLabel")
-    valueLabel.BackgroundTransparency = 1
-    valueLabel.Position = UDim2.new(1, -80, 0, 0)
-    valueLabel.Size = UDim2.fromOffset(80, 24)
-    valueLabel.Font = Enum.Font.Code
-    valueLabel.Text = value
-    valueLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
-    valueLabel.TextSize = 14
-    valueLabel.TextXAlignment = Enum.TextXAlignment.Right
-    valueLabel.Parent = container
-
-    return valueLabel [cite: 43]
-end
-
-local function createColorRow(parent, text)
-    local container = Instance.new("Frame")
-    container.BackgroundTransparency = 1
-    container.Size = UDim2.new(1, -20, 0, 24)
-    container.LayoutOrder = 2
-    container.Parent = parent
-
-    local label = Instance.new("TextLabel")
-    label.BackgroundTransparency = 1
-    label.Position = UDim2.fromOffset(0, 0)
-    label.Size = UDim2.new(1, -60, 1, 0)
-    label.Font = Enum.Font.Code
-    label.Text = text
-    label.TextColor3 = Color3.fromRGB(210, 210, 210)
-    label.TextSize = 14
-    label.TextXAlignment = Enum.TextXAlignment.Left [cite: 44]
-    label.Parent = container
-
-    local box = Instance.new("Frame")
-    box.BackgroundColor3 = Color3.fromRGB(15, 15, 15) -- All Black asset [cite: 44]
-    box.BorderSizePixel = 0
-    box.Size = UDim2.fromOffset(40, 18)
-    box.Position = UDim2.new(1, -40, 0.5, 0)
-    box.AnchorPoint = Vector2.new(1, 0.5)
-    box.Parent = container
-
-    local corner = Instance.new("UICorner", box)
-    corner.CornerRadius = UDim.new(0, 3)
-
-    return box
-end
-
--- Build Menu content (bound to config)
-local ShowWatermarkToggle = createToggle(MenuPanel, "Show Watermark", {"Menu", "ShowWatermark"})
-local CustomCursorToggle  = createToggle(MenuPanel, "Custom Cursor", {"Menu", "CustomCursor"})
-
-local NotificationSideDD = createDropdown(MenuPanel, "Notification Side", CurrentConfig.Menu.NotificationSide, function(v) [cite: 45]
-    CurrentConfig.Menu.NotificationSide = v
-    saveConfig()
-end)
-
-local DPISlider = createSlider(MenuPanel, "DPI Scale", (CurrentConfig.Menu.DPIScale - 0.5), function(rel)
-    local scale = 0.5 + rel
-    CurrentConfig.Menu.DPIScale = scale
-    UIScale.Scale = scale
-    saveConfig()
-end)
-
-local MenuBindLabel = createLabelValue(MenuPanel, "Menu bind", CurrentConfig.Menu.MenuBind)
-
-local ThemesLabel = Instance.new("TextLabel")
-ThemesLabel.BackgroundTransparency = 1
-ThemesLabel.Size = UDim2.new(1, -20, 0, 22)
-ThemesLabel.LayoutOrder = 2
-ThemesLabel.Font = Enum.Font.Code
-ThemesLabel.Text = "Themes"
-ThemesLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
-ThemesLabel.TextSize = 15
-ThemesLabel.TextXAlignment = Enum.TextXAlignment.Left
-ThemesLabel.Parent = MenuPanel
-
-createColorRow(MenuPanel, "Background color")
-createColorRow(MenuPanel, "Main color")
-createColorRow(MenuPanel, "Accent color")
-createColorRow(MenuPanel, "Outline color")
-createColorRow(MenuPanel, "Font color")
-
-local FontFaceDD = createDropdown(MenuPanel, "Font Face", CurrentConfig.Theme.FontFace, function(v) [cite: 46]
-    CurrentConfig.Theme.FontFace = v
-    saveConfig()
-end)
-
-local ThemeListDD = createDropdown(MenuPanel, "Theme list", "---")
-
--- Right panel: Configuration
-local ConfigPanel = Instance.new("Frame")
-ConfigPanel.Name = "ConfigPanel"
-ConfigPanel.BackgroundColor3 = Color3.fromRGB(8, 8, 8) -- All Black [cite: 46]
-ConfigPanel.BorderSizePixel = 0
-ConfigPanel.Position = UDim2.new(0.5, 5, 0, 10)
-ConfigPanel.Size = UDim2.new(0.5, -15, 1, -20)
-ConfigPanel.Parent = UISettingsPage
-
-local ConfigCorner = Instance.new("UICorner", ConfigPanel)
-ConfigCorner.CornerRadius = UDim.new(0, 6)
-
-local ConfigStroke = Instance.new("UIStroke", ConfigPanel)
-ConfigStroke.Color = Color3.fromRGB(30, 30, 30) -- Dark border [cite: 46]
-ConfigStroke.Thickness = 1
-
-local ConfigTitle = Instance.new("TextLabel")
-ConfigTitle.BackgroundTransparency = 1
-ConfigTitle.Position = UDim2.fromOffset(10, 4)
-ConfigTitle.Size = UDim2.new(1, -20, 0, 20)
-ConfigTitle.Font = Enum.Font.Code
-ConfigTitle.Text = "Configuration"
-ConfigTitle.TextColor3 = Color3.fromRGB(230, 230, 230)
-ConfigTitle.TextSize = 16
-ConfigTitle.TextXAlignment = Enum.TextXAlignment.Left
-ConfigTitle.Parent = ConfigPanel
-
-local ConfigLine = Instance.new("Frame")
-ConfigLine.BackgroundColor3 = Color3.fromRGB(30, 30, 30) -- Dark border [cite: 46]
-ConfigLine.BorderSizePixel = 0 [cite: 47]
-ConfigLine.Position = UDim2.fromOffset(10, 24)
-ConfigLine.Size = UDim2.new(1, -20, 0, 1)
-ConfigLine.Parent = ConfigPanel
-
-local ConfigList = Instance.new("UIListLayout", ConfigPanel)
-ConfigList.Padding = UDim.new(0, 6)
-ConfigList.FillDirection = Enum.FillDirection.Vertical
-ConfigList.HorizontalAlignment = Enum.HorizontalAlignment.Left
-ConfigList.VerticalAlignment = Enum.VerticalAlignment.Top
-ConfigList.SortOrder = Enum.SortOrder.LayoutOrder
-
-ConfigTitle.LayoutOrder = 0
-ConfigLine.LayoutOrder = 1
-
-local NameRow = Instance.new("Frame")
-NameRow.BackgroundTransparency = 1
-NameRow.Size = UDim2.new(1, -20, 0, 24)
-NameRow.LayoutOrder = 2
-NameRow.Parent = ConfigPanel
-
-local NameLabel = Instance.new("TextLabel")
-NameLabel.BackgroundTransparency = 1
-NameLabel.Position = UDim2.fromOffset(0, 0)
-NameLabel.Size = UDim2.new(0, 90, 1, 0)
-NameLabel.Font = Enum.Font.Code
-NameLabel.Text = "Config name"
-NameLabel.TextColor3 = Color3.fromRGB(210, 210, 210)
-NameLabel.TextSize = 14
-NameLabel.TextXAlignment = Enum.TextXAlignment.Left
-NameLabel.Parent = NameRow
-
-local NameBox = Instance.new("TextBox")
-NameBox.BackgroundColor3 = Color3.fromRGB(15, 15, 15) -- All Black input box [cite: 47]
-NameBox.BorderSizePixel = 0
-NameBox.Position = UDim2.fromOffset(95, 2)
-NameBox.Size = UDim2.new(1, -95, 0, 20)
-NameBox.Font = Enum.Font.Code
-NameBox.Text = ""
-NameBox.PlaceholderText = "my_config"
-NameBox.TextColor3 = Color3.fromRGB(230, 230, 230)
-NameBox.PlaceholderColor3 = Color3.fromRGB(80, 80, 80) [cite: 48]
-NameBox.TextSize = 13
-NameBox.TextXAlignment = Enum.TextXAlignment.Left
-NameBox.Parent = NameRow
-
-local NameCorner2 = Instance.new("UICorner", NameBox)
-NameCorner2.CornerRadius = UDim.new(0, 3)
-
-local function createButton(parent, text)
-    local btn = Instance.new("TextButton")
-    btn.BackgroundColor3 = Color3.fromRGB(15, 15, 15) -- All Black structural button layout [cite: 48]
-    btn.BorderSizePixel = 0
-    btn.Size = UDim2.new(0.5, -15, 0, 22)
-    btn.Font = Enum.Font.Code
-    btn.Text = text
-    btn.TextColor3 = Color3.fromRGB(220, 220, 220)
-    btn.TextSize = 13
-    btn.Parent = parent
-
-    local corner = Instance.new("UICorner", btn)
-    corner.CornerRadius = UDim.new(0, 3)
-
-    btn.MouseEnter:Connect(function() [cite: 49]
-        btn.BackgroundColor3 = Color3.fromRGB(25, 25, 25) -- Hover highlighting
-    end)
-    btn.MouseLeave:Connect(function()
-        btn.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-    end)
-
-    return btn
-end
-
-local CreateRow = Instance.new("Frame")
-CreateRow.BackgroundTransparency = 1
-CreateRow.Size = UDim2.new(1, -20, 0, 24)
-CreateRow.LayoutOrder = 2
-CreateRow.Parent = ConfigPanel
-
-local CreateBtn = createButton(CreateRow, "Create config")
-CreateBtn.Size = UDim2.new(0, 120, 0, 22)
-CreateBtn.Position = UDim2.fromOffset(0, 0)
-
-local ListRow = Instance.new("Frame")
-ListRow.BackgroundTransparency = 1
-ListRow.Size = UDim2.new(1, -20, 0, 24)
-ListRow.LayoutOrder = 2
-ListRow.Parent = ConfigPanel
-
-local ListLabel = Instance.new("TextLabel")
-ListLabel.BackgroundTransparency = 1
-ListLabel.Position = UDim2.fromOffset(0, 0)
-ListLabel.Size = UDim2.new(0, 80, 1, 0)
-ListLabel.Font = Enum.Font.Code
-ListLabel.Text = "Config list" [cite: 50]
-ListLabel.TextColor3 = Color3.fromRGB(210, 210, 210)
-ListLabel.TextSize = 14
-ListLabel.TextXAlignment = Enum.TextXAlignment.Left
-ListLabel.Parent = ListRow
-
-local ListDropdown = Instance.new("TextButton")
-ListDropdown.BackgroundColor3 = Color3.fromRGB(15, 15, 15) -- All Black asset dropdown [cite: 50]
-ListDropdown.BorderSizePixel = 0
-ListDropdown.Position = UDim2.fromOffset(85, 2)
-ListDropdown.Size = UDim2.new(1, -85, 0, 20)
-ListDropdown.Font = Enum.Font.Code
-ListDropdown.Text = "---"
-ListDropdown.TextColor3 = Color3.fromRGB(220, 220, 220)
-ListDropdown.TextSize = 13
-ListDropdown.TextXAlignment = Enum.TextXAlignment.Left
-ListDropdown.Parent = ListRow
-
-local ListCorner2 = Instance.new("UICorner", ListDropdown)
-ListCorner2.CornerRadius = UDim.new(0, 3)
-
-local ButtonsGrid = Instance.new("Frame")
-ButtonsGrid.BackgroundTransparency = 1
-ButtonsGrid.Size = UDim2.new(1, -20, 0, 80)
-ButtonsGrid.LayoutOrder = 2
-ButtonsGrid.Parent = ConfigPanel
-
-local GridLayout = Instance.new("UIGridLayout", ButtonsGrid)
-GridLayout.CellSize = UDim2.fromOffset(150, 22)
-GridLayout.CellPadding = UDim2.fromOffset(10, 6)
-GridLayout.FillDirection = Enum.FillDirection.Horizontal
-GridLayout.SortOrder = Enum.SortOrder.LayoutOrder
-
-local LoadConfigBtn = createButton(ButtonsGrid, "Load config")
-local OverwriteBtn = createButton(ButtonsGrid, "Overwrite config")
-local DeleteBtn = createButton(ButtonsGrid, "Delete config")
-local RefreshBtn = createButton(ButtonsGrid, "Refresh list")
-local SetAutoBtn = createButton(ButtonsGrid, "Set as autoload") [cite: 50, 51]
-local ResetAutoBtn = createButton(ButtonsGrid, "Reset autoload")
-
-local AutoLabel = Instance.new("TextLabel")
-AutoLabel.BackgroundTransparency = 1
-AutoLabel.Size = UDim2.new(1, -20, 0, 20)
-AutoLabel.LayoutOrder = 2
-AutoLabel.Font = Enum.Font.Code
-AutoLabel.Text = "Current autoload config: " .. (autoloadName or "none")
-AutoLabel.TextColor3 = Color3.fromRGB(140, 140, 140)
-AutoLabel.TextSize = 13
-AutoLabel.TextXAlignment = Enum.TextXAlignment.Left
-AutoLabel.Parent = ConfigPanel
-
-local function refreshConfigList()
-    local names = listConfigs()
-    if #names == 0 then
-        ListDropdown.Text = "---"
+-- Prediction
+local function getPredictedPosition(part, config)
+    if not config['Use Prediction'] then return part.Position end
+    
+    local velocity = part.AssemblyLinearVelocity or part.Velocity or Vector3.new(0, 0, 0)
+    local prediction = config['Prediction']
+    
+    if type(prediction) == "table" then
+        local predX = prediction['X'] or 0.133
+        local predY = prediction['Y'] or 0.133
+        local predZ = prediction['Z'] or 0.133
+        
+        return part.Position + Vector3.new(velocity.X * predX, velocity.Y * predY, velocity.Z * predZ)
     else
-        ListDropdown.Text = names[1]
-    end
-end
-
-CreateBtn.MouseButton1Click:Connect(function()
-    local name = NameBox.Text:gsub("%s+", "")
-    if name == "" then [cite: 52]
-        name = "config_" .. tostring(os.time())
-    end
-    CurrentConfigName = name
-    saveConfig(name)
-    refreshConfigList()
-    ListDropdown.Text = name
-end)
-
-RefreshBtn.MouseButton1Click:Connect(function()
-    refreshConfigList()
-end)
-
-LoadConfigBtn.MouseButton1Click:Connect(function()
-    local name = ListDropdown.Text
-    if name ~= "---" then
-        if loadConfig(name) then
-            CurrentConfigName = name
-            AutoLabel.Text = "Current autoload config: " .. (loadAutoload() or "none") [cite: 53]
-            ShowWatermarkToggle.Set(CurrentConfig.Menu.ShowWatermark)
-            CustomCursorToggle.Set(CurrentConfig.Menu.CustomCursor)
-            NotificationSideDD.Text = CurrentConfig.Menu.NotificationSide
-            DPISlider.Set(CurrentConfig.Menu.DPIScale - 0.5)
-            UIScale.Scale = CurrentConfig.Menu.DPIScale
-            MenuBindLabel.Text = CurrentConfig.Menu.MenuBind
-        end [cite: 54]
-    end
-end)
-
-OverwriteBtn.MouseButton1Click:Connect(function()
-    local name = ListDropdown.Text
-    if name ~= "---" then
-        saveConfig(name)
-    end
-end)
-
-DeleteBtn.MouseButton1Click:Connect(function()
-    local name = ListDropdown.Text
-    if name ~= "---" then
-        local path = CONFIG_FOLDER .. "/" .. name .. ".json"
-        if isfile(path) then
-            delfile(path)
+        if prediction == 0 then
+            prediction = 0.1245
         end
-        refreshConfigList() [cite: 55]
-    end
-end)
-
-SetAutoBtn.MouseButton1Click:Connect(function()
-    local name = ListDropdown.Text
-    if name ~= "---" then
-        saveAutoload(name)
-        AutoLabel.Text = "Current autoload config: " .. name
-    end
-end)
-
-ResetAutoBtn.MouseButton1Click:Connect(function()
-    saveAutoload(nil)
-    AutoLabel.Text = "Current autoload config: none"
-end)
-
-refreshConfigList()
---------------------------------------------------
--- COMBAT PAGE + HITBOX DEBUG
---------------------------------------------------
-
-local CombatPanel = Instance.new("Frame")
-CombatPanel.Name = "CombatPanel"
-CombatPanel.BackgroundColor3 = Color3.fromRGB(8, 8, 8) -- All Black panel framework [cite: 55]
-CombatPanel.BorderSizePixel = 0
-CombatPanel.Position = UDim2.fromOffset(10, 10)
-CombatPanel.Size = UDim2.new(1, -20, 1, -20)
-CombatPanel.Parent = CombatPage
-
-local CombatCorner = Instance.new("UICorner", CombatPanel)
-CombatCorner.CornerRadius = UDim.new(0, 6)
-
-local CombatStroke = Instance.new("UIStroke", CombatPanel) [cite: 56]
-CombatStroke.Color = Color3.fromRGB(30, 30, 30) -- Dark border [cite: 56]
-CombatStroke.Thickness = 1
-
-local CombatTitle = Instance.new("TextLabel")
-CombatTitle.BackgroundTransparency = 1
-CombatTitle.Position = UDim2.fromOffset(10, 4)
-CombatTitle.Size = UDim2.new(1, -20, 0, 20)
-CombatTitle.Font = Enum.Font.Code
-CombatTitle.Text = "Combat"
-CombatTitle.TextColor3 = Color3.fromRGB(230, 230, 230)
-CombatTitle.TextSize = 16
-CombatTitle.TextXAlignment = Enum.TextXAlignment.Left
-CombatTitle.Parent = CombatPanel
-
-local CombatLine = Instance.new("Frame")
-CombatLine.BackgroundColor3 = Color3.fromRGB(30, 30, 30) -- Dark line divider
-CombatLine.BorderSizePixel = 0
-CombatLine.Position = UDim2.fromOffset(10, 24)
-CombatLine.Size = UDim2.new(1, -20, 0, 1)
-CombatLine.Parent = CombatPanel
-
-local CombatList = Instance.new("UIListLayout", CombatPanel)
-CombatList.Padding = UDim.new(0, 6)
-CombatList.FillDirection = Enum.FillDirection.Vertical
-CombatList.HorizontalAlignment = Enum.HorizontalAlignment.Left
-CombatList.VerticalAlignment = Enum.VerticalAlignment.Top
-CombatList.SortOrder = Enum.SortOrder.LayoutOrder
-
-CombatTitle.LayoutOrder = 0
-CombatLine.LayoutOrder = 1
-
-local HitboxToggle = createToggle(CombatPanel, "Hitbox outlines (other players)", {"Combat", "HitboxOutlines"})
-local ImpactToggle = createToggle(CombatPanel, "Impact markers", {"Combat", "ImpactMarkers"})
-local HitLogToggle = createToggle(CombatPanel, "Hit log", {"Combat", "HitLog"})
-
--- Hitbox debug state
-local HitboxEnabled = CurrentConfig.Combat.HitboxOutlines [cite: 57]
-local ImpactEnabled = CurrentConfig.Combat.ImpactMarkers
-local HitLogEnabled = CurrentConfig.Combat.HitLog
-
-HitboxToggle.Set(HitboxEnabled)
-ImpactToggle.Set(ImpactEnabled)
-HitLogToggle.Set(HitLogEnabled)
-
-local Highlights = {}
-
-local function isOtherPlayerCharacter(char)
-    local plr = Players:GetPlayerFromCharacter(char)
-    return plr and plr ~= LOCAL_PLAYER
-end
-
-local function createHighlightForCharacter(char)
-    if not isOtherPlayerCharacter(char) then return end
-    if Highlights[char] then return end
-
-    local h = Instance.new("Highlight")
-    h.FillTransparency = 1
-    h.OutlineTransparency = 0
-    h.OutlineColor = Color3.fromRGB(255, 255, 255)
-    h.Adornee = char
-    h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    h.Parent = ROOT
-    Highlights[char] = h
-end
-
-local function removeHighlightForCharacter(char) [cite: 58]
-    local h = Highlights[char]
-    if h then
-        h:Destroy()
-        Highlights[char] = nil
+        
+        return part.Position + (velocity * prediction)
     end
 end
 
-local function refreshHighlights()
-    for char, _ in pairs(Highlights) do
-        if not char.Parent or not isOtherPlayerCharacter(char) then
-            removeHighlightForCharacter(char)
+-- Camera lock target
+local function getTargetForCameraLock()
+    if Config['Settings']['Target Aim'] and currentTarget then
+        local player = Players:GetPlayerFromCharacter(currentTarget.Parent)
+        if player and not isPlayerKnockedOrKO(player) then
+            local targetPart = nil
+            
+            if Config['Camera Lock']['Hit Part'] == 'Closest Part' then
+                targetPart = getClosestBodyPart(currentTarget.Parent)
+            else
+                targetPart = currentTarget.Parent:FindFirstChild(Config['Camera Lock']['Hit Part'])
+            end
+            
+            if targetPart then
+                if canSeeTarget(targetPart) then
+                    lastVisibleTarget = currentTarget
+                    return targetPart
+                else
+                    return nil
+                end
+            end
         end
+        
+        currentTarget = nil
+        isLocking = false
+        lastVisibleTarget = nil
+        return nil
+    else
+        return findClosestTarget()
     end
-    if not HitboxEnabled then
-        for char, _ in pairs(Highlights) do [cite: 59]
-            removeHighlightForCharacter(char)
-        end
+end
+
+-- Apply camera lock
+local function applyCameraLock()
+    if not isLocking then return end
+    
+    if isSelfKnocked() then
+        currentTarget = nil
+        isLocking = false
+        lastVisibleTarget = nil
         return
     end
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= LOCAL_PLAYER then
-            local char = plr.Character
-            if char then
-                createHighlightForCharacter(char) [cite: 60]
+    
+    local target = getTargetForCameraLock()
+    
+    if target then
+        local targetPos = getPredictedPosition(target, Config['Camera Lock'])
+        
+        local cameraCFrame = Camera.CFrame
+        local targetCFrame = CFrame.new(cameraCFrame.Position, targetPos)
+        
+        local smoothValue = Config['Camera Lock']['Smoothing']
+        local baseAlpha = 1 / smoothValue
+        
+        local elasticAlpha = elasticOut(math.min(baseAlpha, 1))
+        local smoothCFrame = cameraCFrame:Lerp(targetCFrame, elasticAlpha * baseAlpha)
+        
+        local sineAlpha = sineInOut(math.min(baseAlpha, 1))
+        Camera.CFrame = smoothCFrame:Lerp(targetCFrame, sineAlpha * baseAlpha)
+    else
+        if lastVisibleTarget then
+            local player = Players:GetPlayerFromCharacter(lastVisibleTarget.Parent)
+            if player and not isPlayerKnockedOrKO(player) then
+                local targetPart = lastVisibleTarget
+                if targetPart and canSeeTarget(targetPart) then
+                    currentTarget = lastVisibleTarget
+                end
             end
         end
     end
 end
 
-Players.PlayerAdded:Connect(function(plr)
-    plr.CharacterAdded:Connect(function(char)
-        if HitboxEnabled then
-            createHighlightForCharacter(char)
-        end
-    end)
-end)
-
-Players.PlayerRemoving:Connect(function(plr)
-    if plr ~= LOCAL_PLAYER and plr.Character then
-        removeHighlightForCharacter(plr.Character)
-    end
-end)
-
-RunService.Heartbeat:Connect(function()
-    refreshHighlights()
-end)
-
--- Impact markers
-local function spawnImpactMarker(position)
-    if not ImpactEnabled then return end
-    local part = Instance.new("Part")
-    part.Anchored = true
-    part.CanCollide = false
-    part.Size = Vector3.new(0.1, 0.1, 0.1)
-    part.Color = Color3.fromRGB(255, 255, 255)
-    part.Material = Enum.Material.Neon
-    part.CollisionGroup = "Default"
-    part.Position = position
-    part.Parent = workspace [cite: 61]
-
-    task.delay(0.4, function()
-        if part then part:Destroy() end
-    end)
+-- FOV box
+if not fovBox then
+    fovBox = Drawing.new("Square")
+    fovBox.Visible = false
+    fovBox.Thickness = Config['FOV']['Thickness']
+    fovBox.Color = Config['FOV']['Color']
+    fovBox.Filled = false
+    fovBox.Size = Vector2.new(0, 0)
 end
 
--- Hit log UI
-local HitLogFrame = Instance.new("ScrollingFrame") [cite: 62]
-HitLogFrame.Name = "HitLogFrame"
-HitLogFrame.BackgroundColor3 = Color3.fromRGB(5, 5, 5) -- All Black background logging slot [cite: 62]
-HitLogFrame.BorderSizePixel = 0
-HitLogFrame.Position = UDim2.fromOffset(10, 80)
-HitLogFrame.Size = UDim2.new(1, -20, 1, -90)
-HitLogFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-HitLogFrame.ScrollBarThickness = 4
-HitLogFrame.Visible = true
-HitLogFrame.Parent = CombatPanel
-
-local HitLogLayout = Instance.new("UIListLayout", HitLogFrame)
-HitLogLayout.SortOrder = Enum.SortOrder.LayoutOrder
-HitLogLayout.Padding = UDim.new(0, 2)
-
-local HitLogTemplate = Instance.new("TextLabel")
-HitLogTemplate.BackgroundTransparency = 1
-HitLogTemplate.Size = UDim2.new(1, -4, 0, 16)
-HitLogTemplate.Font = Enum.Font.Code
-HitLogTemplate.Text = ""
-HitLogTemplate.TextColor3 = Color3.fromRGB(220, 220, 220)
-HitLogTemplate.TextSize = 12
-HitLogTemplate.TextXAlignment = Enum.TextXAlignment.Left
-HitLogTemplate.Visible = false
-HitLogTemplate.Parent = HitLogFrame
-
-local function addHitLog(entry)
-    if not HitLogEnabled then return end
-    local clone = HitLogTemplate:Clone()
-    clone.Visible = true
-    clone.Parent = HitLogFrame
-    clone.Text = string.format(
-        "[%s] %s | %s | %d dmg | %dm", [cite: 63, 64]
-        os.date("%H:%M:%S", entry.Time or os.time()),
-        entry.TargetName or "Unknown",
-        entry.PartName or "Unknown",
-        entry.Damage or 0,
-        entry.Distance or 0
-    )
-    HitLogFrame.CanvasSize = UDim2.new(0, 0, 0, HitLogLayout.AbsoluteContentSize.Y + 4)
-end
-
-local HitLogRemote = ReplicatedStorage:FindFirstChild("Sanity_HitLog")
-if HitLogRemote then
-    HitLogRemote.OnClientEvent:Connect(function(entry)
-        addHitLog(entry)
-        if entry.HitPosition then
-            spawnImpactMarker(entry.HitPosition) [cite: 65]
-        end
-    end)
-end
-
--- Keep combat flags in sync with toggles
-HitboxToggle.Set(CurrentConfig.Combat.HitboxOutlines)
-ImpactToggle.Set(CurrentConfig.Combat.ImpactMarkers)
-HitLogToggle.Set(CurrentConfig.Combat.HitLog)
-
-HitboxToggle.Set(HitboxToggle.Get())
-ImpactToggle.Set(ImpactToggle.Get())
-HitLogToggle.Set(HitLogToggle.Get())
-
-task.spawn(function()
-    while ROOT.Parent do
-        HitboxEnabled = CurrentConfig.Combat.HitboxOutlines
-        ImpactEnabled = CurrentConfig.Combat.ImpactMarkers
-        HitLogEnabled = CurrentConfig.Combat.HitLog
-        task.wait(0.2)
-    end
-end)
---------------------------------------------------
--- VISUALS PAGE (minimal stub, ready to extend)
---------------------------------------------------
-
-local VisualsPanel = Instance.new("Frame")
-VisualsPanel.Name = "VisualsPanel"
-VisualsPanel.BackgroundColor3 = Color3.fromRGB(8, 8, 8) -- All Black panel [cite: 65]
-VisualsPanel.BorderSizePixel = 0 [cite: 66]
-VisualsPanel.Position = UDim2.fromOffset(10, 10)
-VisualsPanel.Size = UDim2.new(1, -20, 1, -20)
-VisualsPanel.Parent = VisualsPage
-
-local VisualsCorner = Instance.new("UICorner", VisualsPanel)
-VisualsCorner.CornerRadius = UDim.new(0, 6)
-
-local VisualsStroke = Instance.new("UIStroke", VisualsPanel)
-VisualsStroke.Color = Color3.fromRGB(30, 30, 30) -- Dark border
-VisualsStroke.Thickness = 1
-
-local VisualsTitle = Instance.new("TextLabel")
-VisualsTitle.BackgroundTransparency = 1
-VisualsTitle.Position = UDim2.fromOffset(10, 4)
-VisualsTitle.Size = UDim2.new(1, -20, 0, 20)
-VisualsTitle.Font = Enum.Font.Code
-VisualsTitle.Text = "Visuals"
-VisualsTitle.TextColor3 = Color3.fromRGB(230, 230, 230)
-VisualsTitle.TextSize = 16
-VisualsTitle.TextXAlignment = Enum.TextXAlignment.Left
-VisualsTitle.Parent = VisualsPanel
-
-local VisualsLine = Instance.new("Frame")
-VisualsLine.BackgroundColor3 = Color3.fromRGB(30, 30, 30) -- Dark border line
-VisualsLine.BorderSizePixel = 0
-VisualsLine.Position = UDim2.fromOffset(10, 24)
-VisualsLine.Size = UDim2.new(1, -20, 0, 1)
-VisualsLine.Parent = VisualsPanel
-
---------------------------------------------------
--- PLAYER MODS PAGE (minimal stub)
---------------------------------------------------
-
-local PlayerModsPanel = Instance.new("Frame")
-PlayerModsPanel.Name = "PlayerModsPanel"
-PlayerModsPanel.BackgroundColor3 = Color3.fromRGB(8, 8, 8) -- All Black panel
-PlayerModsPanel.BorderSizePixel = 0
-PlayerModsPanel.Position = UDim2.fromOffset(10, 10)
-PlayerModsPanel.Size = UDim2.new(1, -20, 1, -20)
-PlayerModsPanel.Parent = PlayerModsPage
-
-local PlayerModsCorner = Instance.new("UICorner", PlayerModsPanel) [cite: 67]
-PlayerModsCorner.CornerRadius = UDim.new(0, 6)
-
-local PlayerModsStroke = Instance.new("UIStroke", PlayerModsPanel)
-PlayerModsStroke.Color = Color3.fromRGB(30, 30, 30) -- Dark border
-PlayerModsStroke.Thickness = 1
-
-local PlayerModsTitle = Instance.new("TextLabel")
-PlayerModsTitle.BackgroundTransparency = 1
-PlayerModsTitle.Position = UDim2.fromOffset(10, 4)
-PlayerModsTitle.Size = UDim2.new(1, -20, 0, 20)
-PlayerModsTitle.Font = Enum.Font.Code
-PlayerModsTitle.Text = "Player Mods"
-PlayerModsTitle.TextColor3 = Color3.fromRGB(230, 230, 230)
-PlayerModsTitle.TextSize = 16
-PlayerModsTitle.TextXAlignment = Enum.TextXAlignment.Left
-PlayerModsTitle.Parent = PlayerModsPanel
-
-local PlayerModsLine = Instance.new("Frame")
-PlayerModsLine.BackgroundColor3 = Color3.fromRGB(30, 30, 30) -- Dark line divider
-PlayerModsLine.BorderSizePixel = 0
-PlayerModsLine.Position = UDim2.fromOffset(10, 24)
-PlayerModsLine.Size = UDim2.new(1, -20, 0, 1)
-PlayerModsLine.Parent = PlayerModsPanel
-
---------------------------------------------------
--- TAB LOGIC
---------------------------------------------------
-
-local function setActiveTab(tabName)
-    for name, btn in pairs(Tabs) do
-        if name == tabName then
-            btn.BackgroundColor3 = Color3.fromRGB(20, 20, 20) -- Slightly lighter black selection [cite: 68]
-        else
-            btn.BackgroundColor3 = Color3.fromRGB(5, 5, 5) -- Unselected black button back ground
-        end
-    end
-
-    UISettingsPage.Visible = (tabName == "UI Settings")
-    CombatPage.Visible     = (tabName == "Combat")
-    VisualsPage.Visible    = (tabName == "Visuals")
-    PlayerModsPage.Visible = (tabName == "Player Mods")
-end
-
-for name, btn in pairs(Tabs) do
-    btn.MouseButton1Click:Connect(function()
-        setActiveTab(name)
-    end) [cite: 69]
-end
-
-setActiveTab("UI Settings")
-
---------------------------------------------------
--- MENU TOGGLE KEYBIND
---------------------------------------------------
-
-local open = true
-
-local function setVisible(state)
-    open = state
-    MainFrame.Visible = open
-    Watermark.Visible = open and CurrentConfig.Menu.ShowWatermark
-end
-
-ShowWatermarkToggle.Set(CurrentConfig.Menu.ShowWatermark)
-
-UserInputService.InputBegan:Connect(function(input, gpe)
-    if gpe then return end
-    if input.KeyCode.Name == CurrentConfig.Menu.MenuBind then
-        setVisible(not open)
-    end
-end)
---------------------------------------------------
--- APPLY INITIAL CONFIG
---------------------------------------------------
-
--- DPI
-UIScale.Scale = CurrentConfig.Menu.DPIScale
-
--- Watermark visibility
-Watermark.Visible = false
-
---------------------------------------------------
--- TRANSITION: Loader -> Main UI
---------------------------------------------------
-
-LoadBtn.MouseButton1Click:Connect(function()
-    if not selectedOption then
-        LoaderStatus.Text = "Error: Assign a build target first."
-        LoaderStatus.TextColor3 = Color3.fromRGB(255, 80, 80) [cite: 70]
+local function updateFOVBox()
+    if not Config['FOV']['Enabled'] or not Config['FOV']['Visible'] then
+        fovBox.Visible = false
         return
     end
-
-    if KeyBox.Text == CORRECT_KEY then
-        LoaderStatus.Text = "Success: Module compiling..."
-        LoaderStatus.TextColor3 = Color3.fromRGB(120, 255, 120)
-
-        task.wait(0.4)
-
-        -- Fade out loader
-        tweenTransparency(LoaderFrame, 1, 0.4)
-        task.wait(0.45)
-        LoaderFrame.Visible = false [cite: 71]
-
-        -- Show + fade in main UI
-        MainFrame.Visible = true
-        Watermark.Visible = CurrentConfig.Menu.ShowWatermark
-
-        for _, obj in ipairs(MainFrame:GetDescendants()) do
-            if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
-                obj.TextTransparency = 1
-            elseif obj:IsA("Frame") or obj:IsA("ImageLabel") or obj:IsA("ImageButton") then [cite: 72]
-                obj.BackgroundTransparency = 1
+    
+    if currentTarget then
+        local character = currentTarget.Parent
+        if character then
+            local rootPart = character:FindFirstChild("HumanoidRootPart")
+            local head = character:FindFirstChild("Head")
+            
+            if rootPart and head then
+                local headPos, headOnScreen = Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0))
+                local legPos, legOnScreen = Camera:WorldToViewportPoint(rootPart.Position - Vector3.new(0, 3, 0))
+                
+                if headOnScreen and legOnScreen then
+                    local height = math.abs(headPos.Y - legPos.Y)
+                    local width = height / 2
+                    
+                    local rootPos = Camera:WorldToViewportPoint(rootPart.Position)
+                    
+                    local padding = 10
+                    local topLeft = Vector2.new(rootPos.X - width/2 - padding, headPos.Y - padding)
+                    
+                    fovBox.Size = Vector2.new(width + padding * 2, height + padding * 2)
+                    fovBox.Position = topLeft
+                    fovBox.Visible = true
+                    return
+                end
             end
         end
-        MainFrame.BackgroundTransparency = 1
-
-        tweenTransparency(MainFrame, 0, 0.4)
-    else
-        LoaderStatus.Text = "Error: Invalid token string. Discover via discord.gg/j3tRy9meTy" [cite: 73]
-        LoaderStatus.TextColor3 = Color3.fromRGB(255, 80, 80)
     end
-end)--// sanity.miami | Loader + Main UI (16:9 full-height, pure black theme, smooth transition)
+    
+    fovBox.Visible = false
+end
 
-local Players = game:GetService("Players")
-local TweenService = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService")
-local CoreGui = game:GetService("CoreGui")
-local HttpService = game:GetService("HttpService")
-local RunService = game:GetService("RunService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+-- Trigger bot
+local function TriggerBot()
+    if not Config['Trigger Bot']['Enabled'] then return end
+    if not triggerEnabled then return end
+    
+    if tick() - lastTriggerClick < Config['Trigger Bot']['Delay'] then return end
+    
+    if not currentTarget then return end
+    
+    local character = currentTarget.Parent
+    if not character then return end
+    
+    local player = Players:GetPlayerFromCharacter(character)
+    if not player then return end
+    
+    if isPlayerKnockedOrKO(player) then return end
+    
+    if not canSeeTarget(currentTarget) then return end
+    
+    if Config['FOV']['Enabled'] and not isMouseInFOV(character) then return end
+    
+    local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
+    if not tool then return end
+    
+    if Config['Trigger Bot']['Specific Weapons']['Enabled'] then
+        local weaponValid = false
+        for _, weaponName in pairs(Config['Trigger Bot']['Specific Weapons']['Weapons']) do
+            local cleanName = weaponName:gsub("%[", ""):gsub("%]", "")
+            if tool.Name == weaponName or tool.Name:find(cleanName) then
+                weaponValid = true
+                break
+            end
+        end
+        if not weaponValid then return end
+    end
+    
+    tool:Activate()
+    lastTriggerClick = tick()
+end
 
-local LOCAL_PLAYER = Players.LocalPlayer
+-- Silent aim hook
+local grm = getrawmetatable(game)
+local oldIndex = grm.__index
+setreadonly(grm, false)
+grm.__index = function(self, key)
+    if not checkcaller() and self == Mouse and Config['Silent Aim']['Enabled'] then
+        if key == "Hit" then
+            if not currentTarget then return oldIndex(self, key) end
+            
+            local character = currentTarget.Parent
+            if not character then return oldIndex(self, key) end
+            
+            local player = Players:GetPlayerFromCharacter(character)
+            if not player then return oldIndex(self, key) end
+            
+            if isPlayerKnockedOrKO(player) then return oldIndex(self, key) end
+            if not canSeeTarget(currentTarget) then return oldIndex(self, key) end
+            
+            if Config['FOV']['Enabled'] and not isMouseInFOV(character) then
+                return oldIndex(self, key)
+            end
+            
+            local targetPart = currentTarget
+            if targetPart then
+                local predictedPos = getPredictedPosition(targetPart, Config['Silent Aim'])
+                return CFrame.new(predictedPos)
+            end
+        end
+    end
+    return oldIndex(self, key)
+end
 
--- Destroy old
-local old = CoreGui:FindFirstChild("sanity.miami_Root")
-if old then old:Destroy() end
+-- Spread hook
+local oldRandom
+oldRandom = hookfunction(math.random, function(...)
+    local args = {...}
+    if checkcaller() then
+        return oldRandom(...)
+    end
+    
+    if (#args == 0) or (args[1] == -0.05 and args[2] == 0.05) or (args[1] == -0.1) or (args[1] == -0.05) then
+        if Config['Spread']['Enabled'] then
+            if Config['Spread']['Specific Weapons']['Enabled'] then
+                local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
+                if tool then
+                    local weaponName = tool.Name
+                    local foundWeapon = false
+                    
+                    for _, weapon in pairs(Config['Spread']['Specific Weapons']['Weapons']) do
+                        if weaponName == weapon then
+                            foundWeapon = true
+                            break
+                        end
+                    end
+                    
+                    if foundWeapon then
+                        return oldRandom(...) * (Config['Spread']['Amount'] / 100)
+                    end
+                end
+            else
+                return oldRandom(...) * (Config['Spread']['Amount'] / 100)
+            end
+        end
+    end
+    
+    return oldRandom(...)
+end)
 
-local ROOT = Instance.new("ScreenGui")
-ROOT.Name = "sanity.miami_Root"
-ROOT.ResetOnSpawn = false
-ROOT.IgnoreGuiInset = true
-ROOT.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-ROOT.Parent = CoreGui
+-- ESP functions
+local function addESPToPlayer(player)
+    if player == LocalPlayer then return end
+    
+    local esp = {
+        player = player,
+        nameTag = Drawing.new("Text"),
+    }
+    
+    esp.nameTag.Size = 14
+    esp.nameTag.Center = true
+    esp.nameTag.Outline = true
+    esp.nameTag.OutlineColor = Color3.fromRGB(0, 0, 0)
+    esp.nameTag.Color = Config['Visual Awareness']['Color']
+    esp.nameTag.Visible = false
+    esp.nameTag.ZIndex = 1000
+    
+    espLabels[player.UserId] = esp
+end
 
--- Fullscreen container
-local FullContainer = Instance.new("Frame")
-FullContainer.Name = "FullContainer"
-FullContainer.BackgroundTransparency = 1
-FullContainer.Size = UDim2.fromScale(1, 1)
-FullContainer.Position = UDim2.fromScale(0, 0)
-FullContainer.Parent = ROOT
-
--- 16:9 container (dominant height)
-local AspectContainer = Instance.new("Frame")
-AspectContainer.Name = "AspectContainer"
-AspectContainer.AnchorPoint = Vector2.new(0.5, 0.5)
-AspectContainer.Position = UDim2.fromScale(0.5, 0.5)
-AspectContainer.Size = UDim2.fromScale(1, 1)
-AspectContainer.BackgroundTransparency = 1
-AspectContainer.Parent = FullContainer
-
-local AspectConstraint = Instance.new("UIAspectRatioConstraint")
-AspectConstraint.AspectRatio = 16/9 [cite: 2]
-AspectConstraint.DominantAxis = Enum.DominantAxis.Height
-AspectConstraint.Parent = AspectContainer
-
--- UIScale for global scaling
-local UIScale = Instance.new("UIScale")
-UIScale.Scale = 1
-UIScale.Parent = AspectContainer
-
---------------------------------------------------
--- CONFIG SYSTEM (local file-based)
---------------------------------------------------
-
-local CONFIG_FOLDER = "sanity.miami/configs"
-local DEFAULT_CONFIG_NAME = "sanity_default"
-local DEFAULT_CONFIG_PATH = CONFIG_FOLDER .. "/" .. DEFAULT_CONFIG_NAME .. ".json"
-local AUTOLOAD_PATH = CONFIG_FOLDER .. "/autoload.txt"
-
-local CurrentConfigName = DEFAULT_CONFIG_NAME
-local CurrentConfig = {
-    Menu = {
-        ShowWatermark = true,
-        CustomCursor = false,
-        NotificationSide = "Right",
-        DPIScale = 1,
-        MenuBind = "RightShift", [cite: 3]
-    },
-    Combat = {
-        HitboxOutlines = false,
-        ImpactMarkers = false,
-        HitLog = true,
-    },
-    Theme = {
-        BackgroundColor = {0.00, 0.00, 0.00}, -- Updated to pure black
-        MainColor       = {0.02, 0.02, 0.02}, -- Updated to deep pure black
-        AccentColor     = {1, 1, 1},
-        OutlineColor    = {0.15, 0.15, 0.15}, -- Updated to dark subtle outline [cite: 4]
-        FontColor       = {0.9, 0.9, 0.9},
-        FontFace        = "Code",
-    },
-}
-
-local function ensureFolder(path)
-    if not isfolder(path) then
-        makefolder(path)
+local function removeESPFromPlayer(player)
+    local esp = espLabels[player.UserId]
+    if esp then
+        esp.nameTag:Remove()
+        espLabels[player.UserId] = nil
     end
 end
 
-local function saveConfig(name)
-    ensureFolder(CONFIG_FOLDER)
-    name = name or CurrentConfigName
-    local path = CONFIG_FOLDER .. "/" .. name .. ".json" [cite: 5]
-    writefile(path, HttpService:JSONEncode(CurrentConfig))
+local function refreshESP()
+    if not Config['Visual Awareness']['Enabled'] then
+        for _, esp in pairs(espLabels) do
+            esp.nameTag.Visible = false
+        end
+        return
+    end
+    
+    for userId, esp in pairs(espLabels) do
+        local player = esp.player
+        if not player or not player.Parent then
+            esp.nameTag.Visible = false
+            esp.nameTag:Remove()
+            espLabels[userId] = nil
+            continue
+        end
+        
+        if player.Character and player.Character.Parent and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Head") then
+            local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+            if not humanoid or humanoid.Health <= 0 then
+                esp.nameTag.Visible = false
+                continue
+            end
+            
+            local head = player.Character.Head
+            local rootPart = player.Character.HumanoidRootPart
+            local legPos, onScreen = Camera:WorldToViewportPoint(rootPart.Position - Vector3.new(0, 3, 0))
+            
+            if onScreen and legPos.Z > 0 then
+                esp.nameTag.Position = Vector2.new(legPos.X, legPos.Y + 15)
+                
+                -- SHOW DISPLAY NAME FIRST, FALLBACK TO USERNAME
+                if player.DisplayName and player.DisplayName ~= "" then
+                    esp.nameTag.Text = player.DisplayName
+                else
+                    esp.nameTag.Text = player.Name
+                end
+                
+                if currentTarget and currentTarget.Parent == player.Character then
+                    esp.nameTag.Color = Config['Visual Awareness']['Target Color']
+                else
+                    esp.nameTag.Color = Config['Visual Awareness']['Color']
+                end
+                
+                esp.nameTag.Visible = true
+            else
+                esp.nameTag.Visible = false
+            end
+        else
+            esp.nameTag.Visible = false
+        end
+    end
 end
 
-local function loadConfig(name)
-    ensureFolder(CONFIG_FOLDER)
-    name = name or CurrentConfigName
-    local path = CONFIG_FOLDER .. "/" .. name .. ".json"
-    if isfile(path) then
-        local ok, data = pcall(function()
-            return HttpService:JSONDecode(readfile(path))
+-- ESP setup
+for _, player in pairs(Players:GetPlayers()) do
+    if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+        addESPToPlayer(player)
+    end
+    
+    player.CharacterAdded:Connect(function(char)
+        removeESPFromPlayer(player)
+        char:WaitForChild("HumanoidRootPart")
+        task.wait(0.1)
+        addESPToPlayer(player)
+    end)
+    
+    player.CharacterRemoving:Connect(function()
+        removeESPFromPlayer(player)
+    end)
+end
+
+Players.PlayerAdded:Connect(function(player)
+    if player ~= LocalPlayer then
+        player.CharacterAdded:Connect(function(char)
+            removeESPFromPlayer(player)
+            char:WaitForChild("HumanoidRootPart")
+            task.wait(0.1)
+            addESPToPlayer(player)
         end)
-        if ok and type(data) == "table" then
-            CurrentConfig = data
-            CurrentConfigName = name [cite: 6]
-            return true
-        end
-    end
-    return false
-end
-
-local function listConfigs()
-    ensureFolder(CONFIG_FOLDER)
-    local files = listfiles(CONFIG_FOLDER)
-    local names = {}
-    for _, f in ipairs(files) do
-        local n = f:match("([^/\\]+)%.json$")
-        if n and n ~= "autoload" then
-            table.insert(names, n) [cite: 7]
-        end
-    end
-    table.sort(names)
-    return names
-end
-
-local function saveAutoload(name)
-    ensureFolder(CONFIG_FOLDER)
-    if name then
-        writefile(AUTOLOAD_PATH, name)
-    elseif isfile(AUTOLOAD_PATH) then
-        delfile(AUTOLOAD_PATH)
-    end
-end
-
-local function loadAutoload()
-    if isfile(AUTOLOAD_PATH) then
-        local name = readfile(AUTOLOAD_PATH)
-        if name and name ~= "" then [cite: 8]
-            return name
-        end
-    end
-    return nil
-end
-
--- First run: load autoload or default
-local autoloadName = loadAutoload()
-if autoloadName and loadConfig(autoloadName) then
-    -- loaded autoload
-elseif isfile(DEFAULT_CONFIG_PATH) then
-    loadConfig(DEFAULT_CONFIG_NAME)
-else
-    saveConfig(DEFAULT_CONFIG_NAME)
-end
---------------------------------------------------
--- LOADER UI
---------------------------------------------------
-
-local CORRECT_KEY = ".gg/sanitybleh"
-
-local LoaderFrame = Instance.new("Frame")
-LoaderFrame.Name = "LoaderFrame"
-LoaderFrame.Size = UDim2.fromScale(0.55, 0.5)
-LoaderFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-LoaderFrame.Position = UDim2.fromScale(0.5, 0.5)
-LoaderFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0) -- All Black [cite: 8]
-LoaderFrame.BorderSizePixel = 0
-LoaderFrame.Parent = AspectContainer
-
-local LoaderCorner = Instance.new("UICorner", LoaderFrame)
-LoaderCorner.CornerRadius = UDim.new(0, 12)
-
-local LoaderStroke = Instance.new("UIStroke", LoaderFrame) [cite: 9]
-LoaderStroke.Color = Color3.fromRGB(30, 30, 30) -- Dark Border
-LoaderStroke.Thickness = 1
-
--- Dragging loader
-do
-    local dragging, dragStart, startPos
-    LoaderFrame.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true
-            dragStart = input.Position
-            startPos = LoaderFrame.Position
-        end
-    end)
-    LoaderFrame.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then [cite: 10]
-            dragging = false
-        end
-    end)
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-            local delta = input.Position - dragStart
-            LoaderFrame.Position = UDim2.new(
-                startPos.X.Scale,
-                startPos.X.Offset + delta.X, [cite: 11]
-                startPos.Y.Scale,
-                startPos.Y.Offset + delta.Y
-            )
-        end
-    end)
-end
-
--- Loader title
-local LoaderTitle = Instance.new("TextLabel")
-LoaderTitle.BackgroundTransparency = 1
-LoaderTitle.Position = UDim2.fromScale(0.06, 0.08)
-LoaderTitle.Size = UDim2.fromOffset(250, 30)
-LoaderTitle.Font = Enum.Font.Code
-LoaderTitle.Text = "sanity.miami"
-LoaderTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-LoaderTitle.TextSize = 24
-LoaderTitle.TextXAlignment = Enum.TextXAlignment.Left
-LoaderTitle.Parent = LoaderFrame
-
--- Close button
-local LoaderClose = Instance.new("TextButton") [cite: 12]
-LoaderClose.BackgroundTransparency = 1
-LoaderClose.Size = UDim2.fromOffset(32, 32)
-LoaderClose.Position = UDim2.fromScale(0.91, 0.06)
-LoaderClose.Font = Enum.Font.Code
-LoaderClose.Text = "✕"
-LoaderClose.TextColor3 = Color3.fromRGB(160, 160, 160)
-LoaderClose.TextSize = 18
-LoaderClose.Parent = LoaderFrame
-
-LoaderClose.MouseButton1Click:Connect(function()
-    ROOT:Destroy()
-end)
-
--- Universal selection frame
-local UniversalFrame = Instance.new("Frame")
-UniversalFrame.Name = "Universal"
-UniversalFrame.BackgroundColor3 = Color3.fromRGB(5, 5, 5) -- All Black
-UniversalFrame.BorderSizePixel = 0
-UniversalFrame.Position = UDim2.fromScale(0.06, 0.26)
-UniversalFrame.Size = UDim2.fromScale(0.88, 0.16)
-UniversalFrame.Parent = LoaderFrame
-
-local UniversalCorner = Instance.new("UICorner", UniversalFrame)
-UniversalCorner.CornerRadius = UDim.new(0, 8)
-
-local UniversalStroke = Instance.new("UIStroke", UniversalFrame)
-UniversalStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-UniversalStroke.Color = Color3.fromRGB(40, 40, 40) -- Dark Border
-UniversalStroke.Thickness = 1
-
-local UniversalLabel = Instance.new("TextLabel")
-UniversalLabel.BackgroundTransparency = 1
-UniversalLabel.Position = UDim2.fromScale(0.05, 0)
-UniversalLabel.Size = UDim2.new(0.9, 0, 1, 0)
-UniversalLabel.Font = Enum.Font.Code
-UniversalLabel.Text = "Universal Script"
-UniversalLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
-UniversalLabel.TextSize = 16
-UniversalLabel.TextXAlignment = Enum.TextXAlignment.Left
-UniversalLabel.Parent = UniversalFrame
-
--- Key box
-local KeyBox = Instance.new("TextBox")
-KeyBox.Name = "KeyTextBox" [cite: 13]
-KeyBox.BackgroundColor3 = Color3.fromRGB(0, 0, 0) -- Pure Black [cite: 13]
-KeyBox.BorderSizePixel = 0
-KeyBox.Position = UDim2.fromScale(0.06, 0.48)
-KeyBox.Size = UDim2.fromScale(0.88, 0.14)
-KeyBox.Font = Enum.Font.Code
-KeyBox.PlaceholderText = "discord.gg/j3tRy9meTy"
-KeyBox.Text = ""
-KeyBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-KeyBox.PlaceholderColor3 = Color3.fromRGB(80, 80, 80)
-KeyBox.TextSize = 15
-KeyBox.TextXAlignment = Enum.TextXAlignment.Left
-KeyBox.Parent = LoaderFrame
-
-local KeyCorner = Instance.new("UICorner", KeyBox)
-KeyCorner.CornerRadius = UDim.new(0, 8)
-
-local KeyStroke = Instance.new("UIStroke", KeyBox)
-KeyStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-KeyStroke.Color = Color3.fromRGB(30, 30, 30) -- Dark Border
-KeyStroke.Thickness = 1
-
--- Status label
-local LoaderStatus = Instance.new("TextLabel")
-LoaderStatus.Name = "StatusLabel"
-LoaderStatus.BackgroundTransparency = 1
-LoaderStatus.Position = UDim2.fromScale(0.06, 0.66)
-LoaderStatus.Size = UDim2.fromScale(0.88, 0.08)
-LoaderStatus.Font = Enum.Font.Code
-LoaderStatus.Text = "Status: Pending Activation"
-LoaderStatus.TextColor3 = Color3.fromRGB(140, 140, 140)
-LoaderStatus.TextSize = 14
-LoaderStatus.TextXAlignment = Enum.TextXAlignment.Left
-LoaderStatus.Parent = LoaderFrame
-
--- Execute button
-local LoadBtn = Instance.new("TextButton")
-LoadBtn.Name = "Loadbtn"
-LoadBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 20) -- Dark theme execution btn [cite: 14]
-LoadBtn.BorderSizePixel = 0
-LoadBtn.Position = UDim2.fromScale(0.06, 0.78)
-LoadBtn.Size = UDim2.fromScale(0.88, 0.16) [cite: 14]
-LoadBtn.Font = Enum.Font.Code
-LoadBtn.Text = "Execute Layout"
-LoadBtn.TextColor3 = Color3.fromRGB(240, 240, 240) -- White text on dark button [cite: 14]
-LoadBtn.TextSize = 16
-LoadBtn.Parent = LoaderFrame
-
-local LoadCorner = Instance.new("UICorner", LoadBtn)
-LoadCorner.CornerRadius = UDim.new(0, 8)
-
-local selectedOption = nil
-local selectedColor = Color3.fromRGB(255, 255, 255)
-local defaultColor = Color3.fromRGB(40, 40, 40)
-
-local function selectScript(scriptFrame, scriptName)
-    UniversalStroke.Color = defaultColor
-    if scriptFrame then
-        scriptFrame:FindFirstChildOfClass("UIStroke").Color = selectedColor
-        selectedOption = scriptName
-        LoaderStatus.Text = "Status: Ready to process [" .. scriptName .. "]"
-        LoaderStatus.TextColor3 = Color3.fromRGB(230, 230, 230)
-    else [cite: 15]
-        selectedOption = nil
-        LoaderStatus.Text = "Status: Pending Activation"
-        LoaderStatus.TextColor3 = Color3.fromRGB(140, 140, 140)
-    end
-end
-
-UniversalFrame.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        selectScript(UniversalFrame, "Universal")
+        
+        player.CharacterRemoving:Connect(function()
+            removeESPFromPlayer(player)
+        end)
     end
 end)
 
--- Transition helper
-local function tweenTransparency(frame, target, duration)
-    for _, obj in ipairs(frame:GetDescendants()) do
-        if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
-            TweenService:Create(obj, TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = target}):Play() [cite: 16]
-        elseif obj:IsA("Frame") or obj:IsA("ImageLabel") or obj:IsA("ImageButton") then
-            TweenService:Create(obj, TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = target}):Play()
-        end
-    end
-    TweenService:Create(frame, TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = target}):Play()
-end
---------------------------------------------------
--- MAIN UI (hidden initially)
---------------------------------------------------
-
-local MainFrame = Instance.new("Frame")
-MainFrame.Name = "MainUI"
-MainFrame.Size = UDim2.fromScale(0.8, 0.8)
-MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-MainFrame.Position = UDim2.fromScale(0.5, 0.5)
-MainFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0) -- All Black UI [cite: 17]
-MainFrame.BorderSizePixel = 0
-MainFrame.Visible = false
-MainFrame.Parent = AspectContainer
-
-local MainCorner = Instance.new("UICorner", MainFrame)
-MainCorner.CornerRadius = UDim.new(0, 8)
-
-local MainStroke = Instance.new("UIStroke", MainFrame) [cite: 17]
-MainStroke.Color = Color3.fromRGB(30, 30, 30) -- Dark Border [cite: 17]
-MainStroke.Thickness = 1
-
--- Fixed-size watermark (bottom-center)
-local Watermark = Instance.new("TextLabel")
-Watermark.Name = "Watermark"
-Watermark.BackgroundTransparency = 1
-Watermark.Size = UDim2.fromOffset(300, 20)
-Watermark.AnchorPoint = Vector2.new(0.5, 1)
-Watermark.Position = UDim2.new(0.5, 0, 1, -10)
-Watermark.Font = Enum.Font.Code
-Watermark.Text = "sanity.miami"
-Watermark.TextColor3 = Color3.fromRGB(255, 255, 255) -- Made visible on black background
-Watermark.TextSize = 16
-Watermark.TextTransparency = 0
-Watermark.Visible = false
-Watermark.Parent = AspectContainer
-
--- Dragging main UI
-do
-    local dragging, dragStart, startPos
-    MainFrame.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true
-            dragStart = input.Position
-            startPos = MainFrame.Position [cite: 18]
-        end
-    end)
-    MainFrame.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = false
-        end
-    end)
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-            local delta = input.Position - dragStart [cite: 19]
-            MainFrame.Position = UDim2.new(
-                startPos.X.Scale,
-                startPos.X.Offset + delta.X,
-                startPos.Y.Scale,
-                startPos.Y.Offset + delta.Y
-            )
-        end [cite: 20]
-    end)
-end
-
--- Top bar
-local TopBar = Instance.new("Frame")
-TopBar.Name = "TopBar"
-TopBar.BackgroundColor3 = Color3.fromRGB(5, 5, 5) -- All Black
-TopBar.BorderSizePixel = 0
-TopBar.Size = UDim2.new(1, 0, 0, 32)
-TopBar.Parent = MainFrame
-
-local TopStroke = Instance.new("UIStroke", TopBar)
-TopStroke.Color = Color3.fromRGB(25, 25, 25) -- Dark border
-TopStroke.Thickness = 1
-
-local Title = Instance.new("TextLabel")
-Title.BackgroundTransparency = 1
-Title.Position = UDim2.fromOffset(10, 0)
-Title.Size = UDim2.new(0, 250, 1, 0)
-Title.Font = Enum.Font.Code
-Title.Text = "sanity.miami"
-Title.TextColor3 = Color3.fromRGB(235, 235, 235)
-Title.TextSize = 18
-Title.TextXAlignment = Enum.TextXAlignment.Left
-Title.Parent = TopBar
-
-local Subtitle = Instance.new("TextLabel")
-Subtitle.BackgroundTransparency = 1
-Subtitle.Position = UDim2.fromOffset(10, 18)
-Subtitle.Size = UDim2.new(0, 250, 1, -18)
-Subtitle.Font = Enum.Font.Code
-Subtitle.Text = "Universal"
-Subtitle.TextColor3 = Color3.fromRGB(120, 120, 120)
-Subtitle.TextSize = 12
-Subtitle.TextXAlignment = Enum.TextXAlignment.Left
-Subtitle.Parent = TopBar
-
-local CloseMain = Instance.new("TextButton")
-CloseMain.BackgroundTransparency = 1
-CloseMain.Size = UDim2.fromOffset(24, 24) [cite: 21]
-CloseMain.Position = UDim2.new(1, -30, 0, 4)
-CloseMain.Font = Enum.Font.Code
-CloseMain.Text = "✕"
-CloseMain.TextSize = 18
-CloseMain.TextColor3 = Color3.fromRGB(180, 180, 180)
-CloseMain.Parent = TopBar
-
-CloseMain.MouseButton1Click:Connect(function()
-    ROOT:Destroy()
+Players.PlayerRemoving:Connect(function(player)
+    removeESPFromPlayer(player)
 end)
 
--- Sidebar
-local Sidebar = Instance.new("Frame")
-Sidebar.Name = "Sidebar"
-Sidebar.BackgroundColor3 = Color3.fromRGB(2, 2, 2) -- All Black [cite: 21]
-Sidebar.BorderSizePixel = 0
-Sidebar.Position = UDim2.fromOffset(0, 32)
-Sidebar.Size = UDim2.new(0, 150, 1, -32)
-Sidebar.Parent = MainFrame
-
-local SidebarStroke = Instance.new("UIStroke", Sidebar)
-SidebarStroke.Color = Color3.fromRGB(25, 25, 25) -- Dark border
-SidebarStroke.Thickness = 1
-
-local TabList = Instance.new("UIListLayout", Sidebar)
-TabList.Padding = UDim.new(0, 4)
-TabList.FillDirection = Enum.FillDirection.Vertical
-TabList.HorizontalAlignment = Enum.HorizontalAlignment.Left
-TabList.VerticalAlignment = Enum.VerticalAlignment.Top
-TabList.SortOrder = Enum.SortOrder.LayoutOrder
-
-local function createTab(name)
-    local btn = Instance.new("TextButton")
-    btn.Name = name
-    btn.Size = UDim2.new(1, -10, 0, 32)
-    btn.Position = UDim2.fromOffset(5, 0)
-    btn.BackgroundColor3 = Color3.fromRGB(5, 5, 5) -- All Black [cite: 22]
-    btn.BorderSizePixel = 0
-    btn.Font = Enum.Font.Code
-    btn.Text = name
-    btn.TextSize = 14
-    btn.TextColor3 = Color3.fromRGB(180, 180, 180)
-    btn.TextXAlignment = Enum.TextXAlignment.Left
-    btn.Parent = Sidebar
-
-    local corner = Instance.new("UICorner", btn)
-    corner.CornerRadius = UDim.new(0, 4)
-
-    return btn
-end
-
-local Tabs = {
-    Combat = createTab("Combat"),
-    Visuals = createTab("Visuals"),
-    ["Player Mods"] = createTab("Player Mods"),
-    ["UI Settings"] = createTab("UI Settings"), [cite: 23]
-}
-
--- Content
-local Content = Instance.new("Frame")
-Content.Name = "Content"
-Content.BackgroundColor3 = Color3.fromRGB(5, 5, 5) -- All Black [cite: 23]
-Content.BorderSizePixel = 0
-Content.Position = UDim2.fromOffset(150, 32)
-Content.Size = UDim2.new(1, -150, 1, -32)
-Content.Parent = MainFrame
-
-local ContentStroke = Instance.new("UIStroke", Content)
-ContentStroke.Color = Color3.fromRGB(25, 25, 25) -- Dark Border
-ContentStroke.Thickness = 1
-
--- Pages
-local UISettingsPage = Instance.new("Frame")
-UISettingsPage.Name = "UISettingsPage"
-UISettingsPage.BackgroundTransparency = 1
-UISettingsPage.Size = UDim2.fromScale(1, 1)
-UISettingsPage.Parent = Content
-
-local CombatPage = Instance.new("Frame")
-CombatPage.Name = "CombatPage"
-CombatPage.BackgroundTransparency = 1
-CombatPage.Size = UDim2.fromScale(1, 1)
-CombatPage.Visible = false
-CombatPage.Parent = Content
-
-local VisualsPage = Instance.new("Frame")
-VisualsPage.Name = "VisualsPage"
-VisualsPage.BackgroundTransparency = 1
-VisualsPage.Size = UDim2.fromScale(1, 1)
-VisualsPage.Visible = false
-VisualsPage.Parent = Content
-
-local PlayerModsPage = Instance.new("Frame")
-PlayerModsPage.Name = "PlayerModsPage"
-PlayerModsPage.BackgroundTransparency = 1
-PlayerModsPage.Size = UDim2.fromScale(1, 1)
-PlayerModsPage.Visible = false
-PlayerModsPage.Parent = Content
-
-local BottomInfo = Instance.new("TextLabel")
-BottomInfo.BackgroundTransparency = 1
-BottomInfo.Size = UDim2.new(1, -20, 0, 18)
-BottomInfo.Position = UDim2.new(0, 10, 1, -22) [cite: 24]
-BottomInfo.Font = Enum.Font.Code
-BottomInfo.Text = "[UP] Just a baseplate."
-BottomInfo.TextColor3 = Color3.fromRGB(100, 100, 100) [cite: 25]
-BottomInfo.TextSize = 12
-BottomInfo.TextXAlignment = Enum.TextXAlignment.Left
-BottomInfo.Parent = Content
---------------------------------------------------
--- UI SETTINGS PAGE
---------------------------------------------------
-
--- Left panel: Menu
-local MenuPanel = Instance.new("Frame")
-MenuPanel.Name = "MenuPanel"
-MenuPanel.BackgroundColor3 = Color3.fromRGB(8, 8, 8) -- All Black [cite: 25]
-MenuPanel.BorderSizePixel = 0
-MenuPanel.Position = UDim2.fromOffset(10, 10)
-MenuPanel.Size = UDim2.new(0.5, -15, 1, -20)
-MenuPanel.Parent = UISettingsPage
-
-local MenuCorner = Instance.new("UICorner", MenuPanel)
-MenuCorner.CornerRadius = UDim.new(0, 6)
-
-local MenuStroke = Instance.new("UIStroke", MenuPanel)
-MenuStroke.Color = Color3.fromRGB(30, 30, 30) -- Dark border [cite: 25]
-MenuStroke.Thickness = 1
-
-local MenuTitle = Instance.new("TextLabel")
-MenuTitle.BackgroundTransparency = 1
-MenuTitle.Position = UDim2.fromOffset(10, 4)
-MenuTitle.Size = UDim2.new(1, -20, 0, 20)
-MenuTitle.Font = Enum.Font.Code
-MenuTitle.Text = "Menu"
-MenuTitle.TextColor3 = Color3.fromRGB(230, 230, 230)
-MenuTitle.TextSize = 16
-MenuTitle.TextXAlignment = Enum.TextXAlignment.Left
-MenuTitle.Parent = MenuPanel
-
-local MenuLine = Instance.new("Frame")
-MenuLine.BackgroundColor3 = Color3.fromRGB(30, 30, 30) -- Dark outline divider [cite: 26]
-MenuLine.BorderSizePixel = 0
-MenuLine.Position = UDim2.fromOffset(10, 24)
-MenuLine.Size = UDim2.new(1, -20, 0, 1)
-MenuLine.Parent = MenuPanel [cite: 26]
-
-local MenuList = Instance.new("UIListLayout", MenuPanel)
-MenuList.Padding = UDim.new(0, 6)
-MenuList.FillDirection = Enum.FillDirection.Vertical
-MenuList.HorizontalAlignment = Enum.HorizontalAlignment.Left
-MenuList.VerticalAlignment = Enum.VerticalAlignment.Top
-MenuList.SortOrder = Enum.SortOrder.LayoutOrder
-
-MenuTitle.LayoutOrder = 0
-MenuLine.LayoutOrder = 1
-
--- Helpers with config binding
-local function createToggle(parent, text, configPath)
-    local container = Instance.new("Frame")
-    container.BackgroundTransparency = 1
-    container.Size = UDim2.new(1, -20, 0, 24)
-    container.LayoutOrder = 2
-    container.Parent = parent
-
-    local label = Instance.new("TextLabel")
-    label.BackgroundTransparency = 1
-    label.Position = UDim2.fromOffset(0, 0)
-    label.Size = UDim2.new(1, -40, 1, 0)
-    label.Font = Enum.Font.Code
-    label.Text = text [cite: 27]
-    label.TextColor3 = Color3.fromRGB(210, 210, 210)
-    label.TextSize = 14
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = container
-
-    local toggle = Instance.new("TextButton")
-    toggle.BackgroundColor3 = Color3.fromRGB(15, 15, 15) -- All Black
-    toggle.BorderSizePixel = 0
-    toggle.Size = UDim2.fromOffset(32, 18)
-    toggle.Position = UDim2.new(1, -32, 0.5, 0)
-    toggle.AnchorPoint = Vector2.new(1, 0.5)
-    toggle.Font = Enum.Font.Code
-    toggle.Text = ""
-    toggle.Parent = container
-
-    local tCorner = Instance.new("UICorner", toggle)
-    tCorner.CornerRadius = UDim.new(1, 0) [cite: 28]
-
-    local knob = Instance.new("Frame")
-    knob.BackgroundColor3 = Color3.fromRGB(180, 180, 180)
-    knob.BorderSizePixel = 0
-    knob.Size = UDim2.fromOffset(14, 14)
-    knob.Position = UDim2.fromOffset(2, 2)
-    knob.Parent = toggle
-
-    local kCorner = Instance.new("UICorner", knob)
-    kCorner.CornerRadius = UDim.new(1, 0)
-
-    local function getConfigRef()
-        local t = CurrentConfig
-        for i = 1, #configPath - 1 do
-            t = t[configPath[i]] [cite: 29]
-        end
-        local key = configPath[#configPath]
-        return t, key
-    end
-
-    local cfgTable, cfgKey = getConfigRef()
-    local state = cfgTable and cfgTable[cfgKey] or false
-
-    local function applyVisual()
-        if state then
-            toggle.BackgroundColor3 = Color3.fromRGB(220, 220, 220)
-            knob.BackgroundColor3 = Color3.fromRGB(0, 0, 0) -- Flipped to true black inside active [cite: 30]
-            knob.Position = UDim2.fromOffset(32 - 14 - 2, 2)
-        else
-            toggle.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-            knob.BackgroundColor3 = Color3.fromRGB(180, 180, 180)
-            knob.Position = UDim2.fromOffset(2, 2)
-        end
-    end
-
-    local function setState(v)
-        state = v [cite: 31]
-        cfgTable, cfgKey = getConfigRef()
-        if cfgTable then
-            cfgTable[cfgKey] = state
-        end
-        applyVisual()
-        saveConfig()
-    end
-
-    toggle.MouseButton1Click:Connect(function()
-        setState(not state)
-    end)
-
-    applyVisual()
-
-    return {
-        Set = setState, [cite: 32]
-        Get = function() return state end,
-    }
-end
-
-local function createDropdown(parent, text, default, onChange)
-    local container = Instance.new("Frame")
-    container.BackgroundTransparency = 1
-    container.Size = UDim2.new(1, -20, 0, 24)
-    container.LayoutOrder = 2
-    container.Parent = parent
-
-    local label = Instance.new("TextLabel")
-    label.BackgroundTransparency = 1
-    label.Position = UDim2.fromOffset(0, 0)
-    label.Size = UDim2.new(1, -120, 1, 0)
-    label.Font = Enum.Font.Code
-    label.Text = text [cite: 33]
-    label.TextColor3 = Color3.fromRGB(210, 210, 210)
-    label.TextSize = 14
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = container
-
-    local box = Instance.new("TextButton")
-    box.BackgroundColor3 = Color3.fromRGB(15, 15, 15) -- All Black dropdown asset [cite: 33]
-    box.BorderSizePixel = 0
-    box.Size = UDim2.fromOffset(90, 20)
-    box.Position = UDim2.new(1, -90, 0.5, 0)
-    box.AnchorPoint = Vector2.new(1, 0.5)
-    box.Font = Enum.Font.Code
-    box.Text = default or "---"
-    box.TextSize = 13
-    box.TextColor3 = Color3.fromRGB(220, 220, 220) [cite: 34]
-    box.TextXAlignment = Enum.TextXAlignment.Left
-    box.Parent = container
-
-    local corner = Instance.new("UICorner", box)
-    corner.CornerRadius = UDim.new(0, 3)
-
-    box.MouseButton1Click:Connect(function()
-        if text == "Notification Side" then
-            local new = (box.Text == "Right") and "Left" or "Right"
-            box.Text = new
-            if onChange then onChange(new) end [cite: 35]
-        end
-    end)
-
-    return box
-end
-
-local function createSlider(parent, text, default, onChange)
-    local container = Instance.new("Frame")
-    container.BackgroundTransparency = 1
-    container.Size = UDim2.new(1, -20, 0, 32)
-    container.LayoutOrder = 2
-    container.Parent = parent
-
-    local label = Instance.new("TextLabel")
-    label.BackgroundTransparency = 1
-    label.Position = UDim2.fromOffset(0, 0)
-    label.Size = UDim2.new(1, 0, 0, 16)
-    label.Font = Enum.Font.Code [cite: 36]
-    label.Text = text
-    label.TextColor3 = Color3.fromRGB(210, 210, 210)
-    label.TextSize = 14
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = container
-
-    local bar = Instance.new("Frame")
-    bar.BackgroundColor3 = Color3.fromRGB(20, 20, 20) -- Dark layout slot [cite: 36]
-    bar.BorderSizePixel = 0
-    bar.Position = UDim2.fromOffset(0, 18)
-    bar.Size = UDim2.new(1, -40, 0, 6)
-    bar.Parent = container
-
-    local barCorner = Instance.new("UICorner", bar)
-    barCorner.CornerRadius = UDim.new(1, 0)
-
-    local fill = Instance.new("Frame") [cite: 37]
-    fill.BackgroundColor3 = Color3.fromRGB(220, 220, 220)
-    fill.BorderSizePixel = 0
-    fill.Size = UDim2.new((default or 0), 0, 1, 0)
-    fill.Parent = bar
-
-    local fillCorner = Instance.new("UICorner", fill)
-    fillCorner.CornerRadius = UDim.new(1, 0)
-
-    local valueLabel = Instance.new("TextLabel")
-    valueLabel.BackgroundTransparency = 1
-    valueLabel.Position = UDim2.new(1, -40, 0, 14)
-    valueLabel.Size = UDim2.fromOffset(40, 16)
-    valueLabel.Font = Enum.Font.Code
-    valueLabel.Text = tostring(math.floor((default or 0) * 100)) .. "%"
-    valueLabel.TextColor3 = Color3.fromRGB(180, 180, 180) [cite: 38]
-    valueLabel.TextSize = 12
-    valueLabel.TextXAlignment = Enum.TextXAlignment.Right
-    valueLabel.Parent = container
-
-    local value = default or 0
-
-    local function setFromX(x)
-        local rel = math.clamp((x - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
-        value = rel
-        fill.Size = UDim2.new(rel, 0, 1, 0)
-        valueLabel.Text = tostring(math.floor(rel * 100)) .. "%"
-        if onChange then onChange(rel) end [cite: 39]
-    end
-
-    bar.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            setFromX(input.Position.X)
-        end
-    end)
-
-    UserInputService.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
-            if bar.AbsolutePosition and bar.AbsoluteSize then
-                setFromX(input.Position.X)
-            end [cite: 40]
-        end
-    end)
-
-    return {
-        Get = function() return value end,
-        Set = function(v)
-            value = math.clamp(v, 0, 1)
-            fill.Size = UDim2.new(value, 0, 1, 0)
-            valueLabel.Text = tostring(math.floor(value * 100)) .. "%"
-            if onChange then onChange(value) end [cite: 41]
-        end,
-    }
-end
-
-local function createLabelValue(parent, text, value)
-    local container = Instance.new("Frame")
-    container.BackgroundTransparency = 1
-    container.Size = UDim2.new(1, -20, 0, 24)
-    container.LayoutOrder = 2
-    container.Parent = parent
-
-    local label = Instance.new("TextLabel")
-    label.BackgroundTransparency = 1
-    label.Position = UDim2.fromOffset(0, 0)
-    label.Size = UDim2.new(1, -80, 1, 0)
-    label.Font = Enum.Font.Code
-    label.Text = text [cite: 42]
-    label.TextColor3 = Color3.fromRGB(210, 210, 210)
-    label.TextSize = 14
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = container
-
-    local valueLabel = Instance.new("TextLabel")
-    valueLabel.BackgroundTransparency = 1
-    valueLabel.Position = UDim2.new(1, -80, 0, 0)
-    valueLabel.Size = UDim2.fromOffset(80, 24)
-    valueLabel.Font = Enum.Font.Code
-    valueLabel.Text = value
-    valueLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
-    valueLabel.TextSize = 14
-    valueLabel.TextXAlignment = Enum.TextXAlignment.Right
-    valueLabel.Parent = container
-
-    return valueLabel [cite: 43]
-end
-
-local function createColorRow(parent, text)
-    local container = Instance.new("Frame")
-    container.BackgroundTransparency = 1
-    container.Size = UDim2.new(1, -20, 0, 24)
-    container.LayoutOrder = 2
-    container.Parent = parent
-
-    local label = Instance.new("TextLabel")
-    label.BackgroundTransparency = 1
-    label.Position = UDim2.fromOffset(0, 0)
-    label.Size = UDim2.new(1, -60, 1, 0)
-    label.Font = Enum.Font.Code
-    label.Text = text
-    label.TextColor3 = Color3.fromRGB(210, 210, 210)
-    label.TextSize = 14
-    label.TextXAlignment = Enum.TextXAlignment.Left [cite: 44]
-    label.Parent = container
-
-    local box = Instance.new("Frame")
-    box.BackgroundColor3 = Color3.fromRGB(15, 15, 15) -- All Black asset [cite: 44]
-    box.BorderSizePixel = 0
-    box.Size = UDim2.fromOffset(40, 18)
-    box.Position = UDim2.new(1, -40, 0.5, 0)
-    box.AnchorPoint = Vector2.new(1, 0.5)
-    box.Parent = container
-
-    local corner = Instance.new("UICorner", box)
-    corner.CornerRadius = UDim.new(0, 3)
-
-    return box
-end
-
--- Build Menu content (bound to config)
-local ShowWatermarkToggle = createToggle(MenuPanel, "Show Watermark", {"Menu", "ShowWatermark"})
-local CustomCursorToggle  = createToggle(MenuPanel, "Custom Cursor", {"Menu", "CustomCursor"})
-
-local NotificationSideDD = createDropdown(MenuPanel, "Notification Side", CurrentConfig.Menu.NotificationSide, function(v) [cite: 45]
-    CurrentConfig.Menu.NotificationSide = v
-    saveConfig()
-end)
-
-local DPISlider = createSlider(MenuPanel, "DPI Scale", (CurrentConfig.Menu.DPIScale - 0.5), function(rel)
-    local scale = 0.5 + rel
-    CurrentConfig.Menu.DPIScale = scale
-    UIScale.Scale = scale
-    saveConfig()
-end)
-
-local MenuBindLabel = createLabelValue(MenuPanel, "Menu bind", CurrentConfig.Menu.MenuBind)
-
-local ThemesLabel = Instance.new("TextLabel")
-ThemesLabel.BackgroundTransparency = 1
-ThemesLabel.Size = UDim2.new(1, -20, 0, 22)
-ThemesLabel.LayoutOrder = 2
-ThemesLabel.Font = Enum.Font.Code
-ThemesLabel.Text = "Themes"
-ThemesLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
-ThemesLabel.TextSize = 15
-ThemesLabel.TextXAlignment = Enum.TextXAlignment.Left
-ThemesLabel.Parent = MenuPanel
-
-createColorRow(MenuPanel, "Background color")
-createColorRow(MenuPanel, "Main color")
-createColorRow(MenuPanel, "Accent color")
-createColorRow(MenuPanel, "Outline color")
-createColorRow(MenuPanel, "Font color")
-
-local FontFaceDD = createDropdown(MenuPanel, "Font Face", CurrentConfig.Theme.FontFace, function(v) [cite: 46]
-    CurrentConfig.Theme.FontFace = v
-    saveConfig()
-end)
-
-local ThemeListDD = createDropdown(MenuPanel, "Theme list", "---")
-
--- Right panel: Configuration
-local ConfigPanel = Instance.new("Frame")
-ConfigPanel.Name = "ConfigPanel"
-ConfigPanel.BackgroundColor3 = Color3.fromRGB(8, 8, 8) -- All Black [cite: 46]
-ConfigPanel.BorderSizePixel = 0
-ConfigPanel.Position = UDim2.new(0.5, 5, 0, 10)
-ConfigPanel.Size = UDim2.new(0.5, -15, 1, -20)
-ConfigPanel.Parent = UISettingsPage
-
-local ConfigCorner = Instance.new("UICorner", ConfigPanel)
-ConfigCorner.CornerRadius = UDim.new(0, 6)
-
-local ConfigStroke = Instance.new("UIStroke", ConfigPanel)
-ConfigStroke.Color = Color3.fromRGB(30, 30, 30) -- Dark border [cite: 46]
-ConfigStroke.Thickness = 1
-
-local ConfigTitle = Instance.new("TextLabel")
-ConfigTitle.BackgroundTransparency = 1
-ConfigTitle.Position = UDim2.fromOffset(10, 4)
-ConfigTitle.Size = UDim2.new(1, -20, 0, 20)
-ConfigTitle.Font = Enum.Font.Code
-ConfigTitle.Text = "Configuration"
-ConfigTitle.TextColor3 = Color3.fromRGB(230, 230, 230)
-ConfigTitle.TextSize = 16
-ConfigTitle.TextXAlignment = Enum.TextXAlignment.Left
-ConfigTitle.Parent = ConfigPanel
-
-local ConfigLine = Instance.new("Frame")
-ConfigLine.BackgroundColor3 = Color3.fromRGB(30, 30, 30) -- Dark border [cite: 46]
-ConfigLine.BorderSizePixel = 0 [cite: 47]
-ConfigLine.Position = UDim2.fromOffset(10, 24)
-ConfigLine.Size = UDim2.new(1, -20, 0, 1)
-ConfigLine.Parent = ConfigPanel
-
-local ConfigList = Instance.new("UIListLayout", ConfigPanel)
-ConfigList.Padding = UDim.new(0, 6)
-ConfigList.FillDirection = Enum.FillDirection.Vertical
-ConfigList.HorizontalAlignment = Enum.HorizontalAlignment.Left
-ConfigList.VerticalAlignment = Enum.VerticalAlignment.Top
-ConfigList.SortOrder = Enum.SortOrder.LayoutOrder
-
-ConfigTitle.LayoutOrder = 0
-ConfigLine.LayoutOrder = 1
-
-local NameRow = Instance.new("Frame")
-NameRow.BackgroundTransparency = 1
-NameRow.Size = UDim2.new(1, -20, 0, 24)
-NameRow.LayoutOrder = 2
-NameRow.Parent = ConfigPanel
-
-local NameLabel = Instance.new("TextLabel")
-NameLabel.BackgroundTransparency = 1
-NameLabel.Position = UDim2.fromOffset(0, 0)
-NameLabel.Size = UDim2.new(0, 90, 1, 0)
-NameLabel.Font = Enum.Font.Code
-NameLabel.Text = "Config name"
-NameLabel.TextColor3 = Color3.fromRGB(210, 210, 210)
-NameLabel.TextSize = 14
-NameLabel.TextXAlignment = Enum.TextXAlignment.Left
-NameLabel.Parent = NameRow
-
-local NameBox = Instance.new("TextBox")
-NameBox.BackgroundColor3 = Color3.fromRGB(15, 15, 15) -- All Black input box [cite: 47]
-NameBox.BorderSizePixel = 0
-NameBox.Position = UDim2.fromOffset(95, 2)
-NameBox.Size = UDim2.new(1, -95, 0, 20)
-NameBox.Font = Enum.Font.Code
-NameBox.Text = ""
-NameBox.PlaceholderText = "my_config"
-NameBox.TextColor3 = Color3.fromRGB(230, 230, 230)
-NameBox.PlaceholderColor3 = Color3.fromRGB(80, 80, 80) [cite: 48]
-NameBox.TextSize = 13
-NameBox.TextXAlignment = Enum.TextXAlignment.Left
-NameBox.Parent = NameRow
-
-local NameCorner2 = Instance.new("UICorner", NameBox)
-NameCorner2.CornerRadius = UDim.new(0, 3)
-
-local function createButton(parent, text)
-    local btn = Instance.new("TextButton")
-    btn.BackgroundColor3 = Color3.fromRGB(15, 15, 15) -- All Black structural button layout [cite: 48]
-    btn.BorderSizePixel = 0
-    btn.Size = UDim2.new(0.5, -15, 0, 22)
-    btn.Font = Enum.Font.Code
-    btn.Text = text
-    btn.TextColor3 = Color3.fromRGB(220, 220, 220)
-    btn.TextSize = 13
-    btn.Parent = parent
-
-    local corner = Instance.new("UICorner", btn)
-    corner.CornerRadius = UDim.new(0, 3)
-
-    btn.MouseEnter:Connect(function() [cite: 49]
-        btn.BackgroundColor3 = Color3.fromRGB(25, 25, 25) -- Hover highlighting
-    end)
-    btn.MouseLeave:Connect(function()
-        btn.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-    end)
-
-    return btn
-end
-
-local CreateRow = Instance.new("Frame")
-CreateRow.BackgroundTransparency = 1
-CreateRow.Size = UDim2.new(1, -20, 0, 24)
-CreateRow.LayoutOrder = 2
-CreateRow.Parent = ConfigPanel
-
-local CreateBtn = createButton(CreateRow, "Create config")
-CreateBtn.Size = UDim2.new(0, 120, 0, 22)
-CreateBtn.Position = UDim2.fromOffset(0, 0)
-
-local ListRow = Instance.new("Frame")
-ListRow.BackgroundTransparency = 1
-ListRow.Size = UDim2.new(1, -20, 0, 24)
-ListRow.LayoutOrder = 2
-ListRow.Parent = ConfigPanel
-
-local ListLabel = Instance.new("TextLabel")
-ListLabel.BackgroundTransparency = 1
-ListLabel.Position = UDim2.fromOffset(0, 0)
-ListLabel.Size = UDim2.new(0, 80, 1, 0)
-ListLabel.Font = Enum.Font.Code
-ListLabel.Text = "Config list" [cite: 50]
-ListLabel.TextColor3 = Color3.fromRGB(210, 210, 210)
-ListLabel.TextSize = 14
-ListLabel.TextXAlignment = Enum.TextXAlignment.Left
-ListLabel.Parent = ListRow
-
-local ListDropdown = Instance.new("TextButton")
-ListDropdown.BackgroundColor3 = Color3.fromRGB(15, 15, 15) -- All Black asset dropdown [cite: 50]
-ListDropdown.BorderSizePixel = 0
-ListDropdown.Position = UDim2.fromOffset(85, 2)
-ListDropdown.Size = UDim2.new(1, -85, 0, 20)
-ListDropdown.Font = Enum.Font.Code
-ListDropdown.Text = "---"
-ListDropdown.TextColor3 = Color3.fromRGB(220, 220, 220)
-ListDropdown.TextSize = 13
-ListDropdown.TextXAlignment = Enum.TextXAlignment.Left
-ListDropdown.Parent = ListRow
-
-local ListCorner2 = Instance.new("UICorner", ListDropdown)
-ListCorner2.CornerRadius = UDim.new(0, 3)
-
-local ButtonsGrid = Instance.new("Frame")
-ButtonsGrid.BackgroundTransparency = 1
-ButtonsGrid.Size = UDim2.new(1, -20, 0, 80)
-ButtonsGrid.LayoutOrder = 2
-ButtonsGrid.Parent = ConfigPanel
-
-local GridLayout = Instance.new("UIGridLayout", ButtonsGrid)
-GridLayout.CellSize = UDim2.fromOffset(150, 22)
-GridLayout.CellPadding = UDim2.fromOffset(10, 6)
-GridLayout.FillDirection = Enum.FillDirection.Horizontal
-GridLayout.SortOrder = Enum.SortOrder.LayoutOrder
-
-local LoadConfigBtn = createButton(ButtonsGrid, "Load config")
-local OverwriteBtn = createButton(ButtonsGrid, "Overwrite config")
-local DeleteBtn = createButton(ButtonsGrid, "Delete config")
-local RefreshBtn = createButton(ButtonsGrid, "Refresh list")
-local SetAutoBtn = createButton(ButtonsGrid, "Set as autoload") [cite: 50, 51]
-local ResetAutoBtn = createButton(ButtonsGrid, "Reset autoload")
-
-local AutoLabel = Instance.new("TextLabel")
-AutoLabel.BackgroundTransparency = 1
-AutoLabel.Size = UDim2.new(1, -20, 0, 20)
-AutoLabel.LayoutOrder = 2
-AutoLabel.Font = Enum.Font.Code
-AutoLabel.Text = "Current autoload config: " .. (autoloadName or "none")
-AutoLabel.TextColor3 = Color3.fromRGB(140, 140, 140)
-AutoLabel.TextSize = 13
-AutoLabel.TextXAlignment = Enum.TextXAlignment.Left
-AutoLabel.Parent = ConfigPanel
-
-local function refreshConfigList()
-    local names = listConfigs()
-    if #names == 0 then
-        ListDropdown.Text = "---"
-    else
-        ListDropdown.Text = names[1]
-    end
-end
-
-CreateBtn.MouseButton1Click:Connect(function()
-    local name = NameBox.Text:gsub("%s+", "")
-    if name == "" then [cite: 52]
-        name = "config_" .. tostring(os.time())
-    end
-    CurrentConfigName = name
-    saveConfig(name)
-    refreshConfigList()
-    ListDropdown.Text = name
-end)
-
-RefreshBtn.MouseButton1Click:Connect(function()
-    refreshConfigList()
-end)
-
-LoadConfigBtn.MouseButton1Click:Connect(function()
-    local name = ListDropdown.Text
-    if name ~= "---" then
-        if loadConfig(name) then
-            CurrentConfigName = name
-            AutoLabel.Text = "Current autoload config: " .. (loadAutoload() or "none") [cite: 53]
-            ShowWatermarkToggle.Set(CurrentConfig.Menu.ShowWatermark)
-            CustomCursorToggle.Set(CurrentConfig.Menu.CustomCursor)
-            NotificationSideDD.Text = CurrentConfig.Menu.NotificationSide
-            DPISlider.Set(CurrentConfig.Menu.DPIScale - 0.5)
-            UIScale.Scale = CurrentConfig.Menu.DPIScale
-            MenuBindLabel.Text = CurrentConfig.Menu.MenuBind
-        end [cite: 54]
-    end
-end)
-
-OverwriteBtn.MouseButton1Click:Connect(function()
-    local name = ListDropdown.Text
-    if name ~= "---" then
-        saveConfig(name)
-    end
-end)
-
-DeleteBtn.MouseButton1Click:Connect(function()
-    local name = ListDropdown.Text
-    if name ~= "---" then
-        local path = CONFIG_FOLDER .. "/" .. name .. ".json"
-        if isfile(path) then
-            delfile(path)
-        end
-        refreshConfigList() [cite: 55]
-    end
-end)
-
-SetAutoBtn.MouseButton1Click:Connect(function()
-    local name = ListDropdown.Text
-    if name ~= "---" then
-        saveAutoload(name)
-        AutoLabel.Text = "Current autoload config: " .. name
-    end
-end)
-
-ResetAutoBtn.MouseButton1Click:Connect(function()
-    saveAutoload(nil)
-    AutoLabel.Text = "Current autoload config: none"
-end)
-
-refreshConfigList()
---------------------------------------------------
--- COMBAT PAGE + HITBOX DEBUG
---------------------------------------------------
-
-local CombatPanel = Instance.new("Frame")
-CombatPanel.Name = "CombatPanel"
-CombatPanel.BackgroundColor3 = Color3.fromRGB(8, 8, 8) -- All Black panel framework [cite: 55]
-CombatPanel.BorderSizePixel = 0
-CombatPanel.Position = UDim2.fromOffset(10, 10)
-CombatPanel.Size = UDim2.new(1, -20, 1, -20)
-CombatPanel.Parent = CombatPage
-
-local CombatCorner = Instance.new("UICorner", CombatPanel)
-CombatCorner.CornerRadius = UDim.new(0, 6)
-
-local CombatStroke = Instance.new("UIStroke", CombatPanel) [cite: 56]
-CombatStroke.Color = Color3.fromRGB(30, 30, 30) -- Dark border [cite: 56]
-CombatStroke.Thickness = 1
-
-local CombatTitle = Instance.new("TextLabel")
-CombatTitle.BackgroundTransparency = 1
-CombatTitle.Position = UDim2.fromOffset(10, 4)
-CombatTitle.Size = UDim2.new(1, -20, 0, 20)
-CombatTitle.Font = Enum.Font.Code
-CombatTitle.Text = "Combat"
-CombatTitle.TextColor3 = Color3.fromRGB(230, 230, 230)
-CombatTitle.TextSize = 16
-CombatTitle.TextXAlignment = Enum.TextXAlignment.Left
-CombatTitle.Parent = CombatPanel
-
-local CombatLine = Instance.new("Frame")
-CombatLine.BackgroundColor3 = Color3.fromRGB(30, 30, 30) -- Dark line divider
-CombatLine.BorderSizePixel = 0
-CombatLine.Position = UDim2.fromOffset(10, 24)
-CombatLine.Size = UDim2.new(1, -20, 0, 1)
-CombatLine.Parent = CombatPanel
-
-local CombatList = Instance.new("UIListLayout", CombatPanel)
-CombatList.Padding = UDim.new(0, 6)
-CombatList.FillDirection = Enum.FillDirection.Vertical
-CombatList.HorizontalAlignment = Enum.HorizontalAlignment.Left
-CombatList.VerticalAlignment = Enum.VerticalAlignment.Top
-CombatList.SortOrder = Enum.SortOrder.LayoutOrder
-
-CombatTitle.LayoutOrder = 0
-CombatLine.LayoutOrder = 1
-
-local HitboxToggle = createToggle(CombatPanel, "Hitbox outlines (other players)", {"Combat", "HitboxOutlines"})
-local ImpactToggle = createToggle(CombatPanel, "Impact markers", {"Combat", "ImpactMarkers"})
-local HitLogToggle = createToggle(CombatPanel, "Hit log", {"Combat", "HitLog"})
-
--- Hitbox debug state
-local HitboxEnabled = CurrentConfig.Combat.HitboxOutlines [cite: 57]
-local ImpactEnabled = CurrentConfig.Combat.ImpactMarkers
-local HitLogEnabled = CurrentConfig.Combat.HitLog
-
-HitboxToggle.Set(HitboxEnabled)
-ImpactToggle.Set(ImpactEnabled)
-HitLogToggle.Set(HitLogEnabled)
-
-local Highlights = {}
-
-local function isOtherPlayerCharacter(char)
-    local plr = Players:GetPlayerFromCharacter(char)
-    return plr and plr ~= LOCAL_PLAYER
-end
-
-local function createHighlightForCharacter(char)
-    if not isOtherPlayerCharacter(char) then return end
-    if Highlights[char] then return end
-
-    local h = Instance.new("Highlight")
-    h.FillTransparency = 1
-    h.OutlineTransparency = 0
-    h.OutlineColor = Color3.fromRGB(255, 255, 255)
-    h.Adornee = char
-    h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    h.Parent = ROOT
-    Highlights[char] = h
-end
-
-local function removeHighlightForCharacter(char) [cite: 58]
-    local h = Highlights[char]
-    if h then
-        h:Destroy()
-        Highlights[char] = nil
-    end
-end
-
-local function refreshHighlights()
-    for char, _ in pairs(Highlights) do
-        if not char.Parent or not isOtherPlayerCharacter(char) then
-            removeHighlightForCharacter(char)
-        end
-    end
-    if not HitboxEnabled then
-        for char, _ in pairs(Highlights) do [cite: 59]
-            removeHighlightForCharacter(char)
-        end
-        return
-    end
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= LOCAL_PLAYER then
-            local char = plr.Character
-            if char then
-                createHighlightForCharacter(char) [cite: 60]
-            end
-        end
-    end
-end
-
-Players.PlayerAdded:Connect(function(plr)
-    plr.CharacterAdded:Connect(function(char)
-        if HitboxEnabled then
-            createHighlightForCharacter(char)
-        end
-    end)
-end)
-
-Players.PlayerRemoving:Connect(function(plr)
-    if plr ~= LOCAL_PLAYER and plr.Character then
-        removeHighlightForCharacter(plr.Character)
-    end
-end)
-
+-- Super Jump: HOLD B + PRESS SPACE = high jump
 RunService.Heartbeat:Connect(function()
-    refreshHighlights()
-end)
-
--- Impact markers
-local function spawnImpactMarker(position)
-    if not ImpactEnabled then return end
-    local part = Instance.new("Part")
-    part.Anchored = true
-    part.CanCollide = false
-    part.Size = Vector3.new(0.1, 0.1, 0.1)
-    part.Color = Color3.fromRGB(255, 255, 255)
-    part.Material = Enum.Material.Neon
-    part.CollisionGroup = "Default"
-    part.Position = position
-    part.Parent = workspace [cite: 61]
-
-    task.delay(0.4, function()
-        if part then part:Destroy() end
-    end)
-end
-
--- Hit log UI
-local HitLogFrame = Instance.new("ScrollingFrame") [cite: 62]
-HitLogFrame.Name = "HitLogFrame"
-HitLogFrame.BackgroundColor3 = Color3.fromRGB(5, 5, 5) -- All Black background logging slot [cite: 62]
-HitLogFrame.BorderSizePixel = 0
-HitLogFrame.Position = UDim2.fromOffset(10, 80)
-HitLogFrame.Size = UDim2.new(1, -20, 1, -90)
-HitLogFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-HitLogFrame.ScrollBarThickness = 4
-HitLogFrame.Visible = true
-HitLogFrame.Parent = CombatPanel
-
-local HitLogLayout = Instance.new("UIListLayout", HitLogFrame)
-HitLogLayout.SortOrder = Enum.SortOrder.LayoutOrder
-HitLogLayout.Padding = UDim.new(0, 2)
-
-local HitLogTemplate = Instance.new("TextLabel")
-HitLogTemplate.BackgroundTransparency = 1
-HitLogTemplate.Size = UDim2.new(1, -4, 0, 16)
-HitLogTemplate.Font = Enum.Font.Code
-HitLogTemplate.Text = ""
-HitLogTemplate.TextColor3 = Color3.fromRGB(220, 220, 220)
-HitLogTemplate.TextSize = 12
-HitLogTemplate.TextXAlignment = Enum.TextXAlignment.Left
-HitLogTemplate.Visible = false
-HitLogTemplate.Parent = HitLogFrame
-
-local function addHitLog(entry)
-    if not HitLogEnabled then return end
-    local clone = HitLogTemplate:Clone()
-    clone.Visible = true
-    clone.Parent = HitLogFrame
-    clone.Text = string.format(
-        "[%s] %s | %s | %d dmg | %dm", [cite: 63, 64]
-        os.date("%H:%M:%S", entry.Time or os.time()),
-        entry.TargetName or "Unknown",
-        entry.PartName or "Unknown",
-        entry.Damage or 0,
-        entry.Distance or 0
-    )
-    HitLogFrame.CanvasSize = UDim2.new(0, 0, 0, HitLogLayout.AbsoluteContentSize.Y + 4)
-end
-
-local HitLogRemote = ReplicatedStorage:FindFirstChild("Sanity_HitLog")
-if HitLogRemote then
-    HitLogRemote.OnClientEvent:Connect(function(entry)
-        addHitLog(entry)
-        if entry.HitPosition then
-            spawnImpactMarker(entry.HitPosition) [cite: 65]
-        end
-    end)
-end
-
--- Keep combat flags in sync with toggles
-HitboxToggle.Set(CurrentConfig.Combat.HitboxOutlines)
-ImpactToggle.Set(CurrentConfig.Combat.ImpactMarkers)
-HitLogToggle.Set(CurrentConfig.Combat.HitLog)
-
-HitboxToggle.Set(HitboxToggle.Get())
-ImpactToggle.Set(ImpactToggle.Get())
-HitLogToggle.Set(HitLogToggle.Get())
-
-task.spawn(function()
-    while ROOT.Parent do
-        HitboxEnabled = CurrentConfig.Combat.HitboxOutlines
-        ImpactEnabled = CurrentConfig.Combat.ImpactMarkers
-        HitLogEnabled = CurrentConfig.Combat.HitLog
-        task.wait(0.2)
+    if not Config['Super Jump']['Enabled'] then return end
+    
+    local character = LocalPlayer.Character
+    if not character then return end
+    
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    
+    if not humanoid or not rootPart then return end
+    
+    -- Check if holding B
+    local holdingB = UserInputService:IsKeyDown(Enum.KeyCode[Config['Keybinds']['Super Jump']])
+    
+    -- Only super jump when holding B AND on ground (ready to jump)
+    if holdingB and (humanoid:GetState() == Enum.HumanoidStateType.Landed or humanoid.FloorMaterial ~= Enum.Material.Air) then
+        -- Apply high velocity when jumping (Space is handled by Roblox)
+        rootPart.Velocity = Vector3.new(
+            rootPart.Velocity.X,
+            Config['Super Jump']['Power'],
+            rootPart.Velocity.Z
+        )
+        task.wait(Config['Super Jump']['Cooldown'])  -- prevents rapid spam
     end
 end)
---------------------------------------------------
--- VISUALS PAGE (minimal stub, ready to extend)
---------------------------------------------------
 
-local VisualsPanel = Instance.new("Frame")
-VisualsPanel.Name = "VisualsPanel"
-VisualsPanel.BackgroundColor3 = Color3.fromRGB(8, 8, 8) -- All Black panel [cite: 65]
-VisualsPanel.BorderSizePixel = 0 [cite: 66]
-VisualsPanel.Position = UDim2.fromOffset(10, 10)
-VisualsPanel.Size = UDim2.new(1, -20, 1, -20)
-VisualsPanel.Parent = VisualsPage
-
-local VisualsCorner = Instance.new("UICorner", VisualsPanel)
-VisualsCorner.CornerRadius = UDim.new(0, 6)
-
-local VisualsStroke = Instance.new("UIStroke", VisualsPanel)
-VisualsStroke.Color = Color3.fromRGB(30, 30, 30) -- Dark border
-VisualsStroke.Thickness = 1
-
-local VisualsTitle = Instance.new("TextLabel")
-VisualsTitle.BackgroundTransparency = 1
-VisualsTitle.Position = UDim2.fromOffset(10, 4)
-VisualsTitle.Size = UDim2.new(1, -20, 0, 20)
-VisualsTitle.Font = Enum.Font.Code
-VisualsTitle.Text = "Visuals"
-VisualsTitle.TextColor3 = Color3.fromRGB(230, 230, 230)
-VisualsTitle.TextSize = 16
-VisualsTitle.TextXAlignment = Enum.TextXAlignment.Left
-VisualsTitle.Parent = VisualsPanel
-
-local VisualsLine = Instance.new("Frame")
-VisualsLine.BackgroundColor3 = Color3.fromRGB(30, 30, 30) -- Dark border line
-VisualsLine.BorderSizePixel = 0
-VisualsLine.Position = UDim2.fromOffset(10, 24)
-VisualsLine.Size = UDim2.new(1, -20, 0, 1)
-VisualsLine.Parent = VisualsPanel
-
---------------------------------------------------
--- PLAYER MODS PAGE (minimal stub)
---------------------------------------------------
-
-local PlayerModsPanel = Instance.new("Frame")
-PlayerModsPanel.Name = "PlayerModsPanel"
-PlayerModsPanel.BackgroundColor3 = Color3.fromRGB(8, 8, 8) -- All Black panel
-PlayerModsPanel.BorderSizePixel = 0
-PlayerModsPanel.Position = UDim2.fromOffset(10, 10)
-PlayerModsPanel.Size = UDim2.new(1, -20, 1, -20)
-PlayerModsPanel.Parent = PlayerModsPage
-
-local PlayerModsCorner = Instance.new("UICorner", PlayerModsPanel) [cite: 67]
-PlayerModsCorner.CornerRadius = UDim.new(0, 6)
-
-local PlayerModsStroke = Instance.new("UIStroke", PlayerModsPanel)
-PlayerModsStroke.Color = Color3.fromRGB(30, 30, 30) -- Dark border
-PlayerModsStroke.Thickness = 1
-
-local PlayerModsTitle = Instance.new("TextLabel")
-PlayerModsTitle.BackgroundTransparency = 1
-PlayerModsTitle.Position = UDim2.fromOffset(10, 4)
-PlayerModsTitle.Size = UDim2.new(1, -20, 0, 20)
-PlayerModsTitle.Font = Enum.Font.Code
-PlayerModsTitle.Text = "Player Mods"
-PlayerModsTitle.TextColor3 = Color3.fromRGB(230, 230, 230)
-PlayerModsTitle.TextSize = 16
-PlayerModsTitle.TextXAlignment = Enum.TextXAlignment.Left
-PlayerModsTitle.Parent = PlayerModsPanel
-
-local PlayerModsLine = Instance.new("Frame")
-PlayerModsLine.BackgroundColor3 = Color3.fromRGB(30, 30, 30) -- Dark line divider
-PlayerModsLine.BorderSizePixel = 0
-PlayerModsLine.Position = UDim2.fromOffset(10, 24)
-PlayerModsLine.Size = UDim2.new(1, -20, 0, 1)
-PlayerModsLine.Parent = PlayerModsPanel
-
---------------------------------------------------
--- TAB LOGIC
---------------------------------------------------
-
-local function setActiveTab(tabName)
-    for name, btn in pairs(Tabs) do
-        if name == tabName then
-            btn.BackgroundColor3 = Color3.fromRGB(20, 20, 20) -- Slightly lighter black selection [cite: 68]
-        else
-            btn.BackgroundColor3 = Color3.fromRGB(5, 5, 5) -- Unselected black button back ground
-        end
+-- Main loop
+RunService.RenderStepped:Connect(function()
+    if isSelfKnocked() and isLocking then
+        currentTarget = nil
+        isLocking = false
+        lastVisibleTarget = nil
     end
-
-    UISettingsPage.Visible = (tabName == "UI Settings")
-    CombatPage.Visible     = (tabName == "Combat")
-    VisualsPage.Visible    = (tabName == "Visuals")
-    PlayerModsPage.Visible = (tabName == "Player Mods")
-end
-
-for name, btn in pairs(Tabs) do
-    btn.MouseButton1Click:Connect(function()
-        setActiveTab(name)
-    end) [cite: 69]
-end
-
-setActiveTab("UI Settings")
-
---------------------------------------------------
--- MENU TOGGLE KEYBIND
---------------------------------------------------
-
-local open = true
-
-local function setVisible(state)
-    open = state
-    MainFrame.Visible = open
-    Watermark.Visible = open and CurrentConfig.Menu.ShowWatermark
-end
-
-ShowWatermarkToggle.Set(CurrentConfig.Menu.ShowWatermark)
-
-UserInputService.InputBegan:Connect(function(input, gpe)
-    if gpe then return end
-    if input.KeyCode.Name == CurrentConfig.Menu.MenuBind then
-        setVisible(not open)
-    end
-end)
---------------------------------------------------
--- APPLY INITIAL CONFIG
---------------------------------------------------
-
--- DPI
-UIScale.Scale = CurrentConfig.Menu.DPIScale
-
--- Watermark visibility
-Watermark.Visible = false
-
---------------------------------------------------
--- TRANSITION: Loader -> Main UI
---------------------------------------------------
-
-LoadBtn.MouseButton1Click:Connect(function()
-    if not selectedOption then
-        LoaderStatus.Text = "Error: Assign a build target first."
-        LoaderStatus.TextColor3 = Color3.fromRGB(255, 80, 80) [cite: 70]
-        return
-    end
-
-    if KeyBox.Text == CORRECT_KEY then
-        LoaderStatus.Text = "Success: Module compiling..."
-        LoaderStatus.TextColor3 = Color3.fromRGB(120, 255, 120)
-
-        task.wait(0.4)
-
-        -- Fade out loader
-        tweenTransparency(LoaderFrame, 1, 0.4)
-        task.wait(0.45)
-        LoaderFrame.Visible = false [cite: 71]
-
-        -- Show + fade in main UI
-        MainFrame.Visible = true
-        Watermark.Visible = CurrentConfig.Menu.ShowWatermark
-
-        for _, obj in ipairs(MainFrame:GetDescendants()) do
-            if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
-                obj.TextTransparency = 1
-            elseif obj:IsA("Frame") or obj:IsA("ImageLabel") or obj:IsA("ImageButton") then [cite: 72]
-                obj.BackgroundTransparency = 1
+    
+    TriggerBot()
+    
+    if SpeedEnabled and Config['Speed']['Enabled'] then
+        local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
+        if humanoid then
+            local targetSpeed = BaseSpeed * Config['Speed']['Multiplier']
+            
+            if humanoid.WalkSpeed ~= targetSpeed then
+                humanoid.WalkSpeed = targetSpeed
             end
         end
-        MainFrame.BackgroundTransparency = 1
-
-        tweenTransparency(MainFrame, 0, 0.4)
+        
+        if Config['Speed']['Anti Fling'] then
+            local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                local vel = hrp.Velocity
+                if vel.Y > 50 or vel.Y < -50 then
+                    hrp.Velocity = Vector3.new(vel.X, 0, vel.Z)
+                end
+            end
+        end
+    end
+    
+    if Config['Hitbox Expander']['Enabled'] then
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character then
+                local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    hrp.Size = Vector3.new(Config['Hitbox Expander']['Size'], Config['Hitbox Expander']['Size'], Config['Hitbox Expander']['Size'])
+                    
+                    if Config['Hitbox Expander']['Visualize'] then
+                        hrp.Transparency = 0.7
+                        hrp.BrickColor = BrickColor.new("Really blue")
+                        hrp.Material = "Neon"
+                        hrp.CanCollide = false
+                    else
+                        hrp.Transparency = 1
+                    end
+                end
+            end
+        end
+    end
+    
+    if Config['Spiderman']['Enabled'] then
+        local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
+        local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        
+        if humanoid and hrp then
+            local raycastParams = RaycastParams.new()
+            raycastParams.FilterDescendantsInstances = {LocalPlayer.Character}
+            raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+            
+            local directions = {
+                hrp.CFrame.LookVector * 3,
+                hrp.CFrame.RightVector * 3,
+                -hrp.CFrame.RightVector * 3,
+            }
+            
+            local foundWall = false
+            for _, direction in pairs(directions) do
+                local result = Workspace:Raycast(hrp.Position, direction, raycastParams)
+                if result and result.Instance then
+                    foundWall = true
+                    break
+                end
+            end
+            
+            if foundWall then
+                if humanoid:GetState() ~= Enum.HumanoidStateType.Climbing then
+                    humanoid:SetStateEnabled(Enum.HumanoidStateType.Climbing, true)
+                    humanoid:ChangeState(Enum.HumanoidStateType.Climbing)
+                end
+                
+                local bodyVelocity = hrp:FindFirstChild("SpidermanVelocity")
+                if not bodyVelocity then
+                    bodyVelocity = Instance.new("BodyVelocity")
+                    bodyVelocity.Name = "SpidermanVelocity"
+                    bodyVelocity.MaxForce = Vector3.new(0, 4000, 0)
+                    bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+                    bodyVelocity.Parent = hrp
+                end
+            else
+                local bodyVelocity = hrp:FindFirstChild("SpidermanVelocity")
+                if bodyVelocity then
+                    bodyVelocity:Destroy()
+                end
+            end
+        end
     else
-        LoaderStatus.Text = "Error: Invalid token string. Discover via discord.gg/j3tRy9meTy" [cite: 73]
-        LoaderStatus.TextColor3 = Color3.fromRGB(255, 80, 80)
+        local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            local bodyVelocity = hrp:FindFirstChild("SpidermanVelocity")
+            if bodyVelocity then
+                bodyVelocity:Destroy()
+            end
+        end
+    end
+    
+    updateFOVBox()
+    refreshESP()
+    
+    if Config['Camera Lock']['Enabled'] then
+        applyCameraLock()
     end
 end)
+
+-- Input handling
+UserInputService.InputBegan:Connect(function(input, processed)
+    if processed then return end
+    
+    if input.KeyCode == Enum.KeyCode[Config['Keybinds']['Target Lock']['Key']] then
+        local mode = Config['Keybinds']['Target Lock']['Mode']
+        
+        if mode == 'Toggle' then
+            if Config['Settings']['Target Aim'] then
+                if isLocking then
+                    isLocking = false
+                    currentTarget = nil
+                    lastVisibleTarget = nil
+                else
+                    local target = findClosestTarget()
+                    if target then
+                        currentTarget = target
+                        lastVisibleTarget = target
+                        isLocking = true
+                    end
+                end
+            else
+                isLocking = not isLocking
+            end
+        elseif mode == 'Hold' then
+            if Config['Settings']['Target Aim'] then
+                local target = findClosestTarget()
+                if target then
+                    currentTarget = target
+                    lastVisibleTarget = target
+                    isLocking = true
+                end
+            else
+                isLocking = true
+            end
+        end
+    end
+    
+    if input.KeyCode == Enum.KeyCode[Config['Keybinds']['Trigger Bot']['Key']] then
+        local mode = Config['Keybinds']['Trigger Bot']['Mode']
+        
+        if mode == 'Toggle' then
+            triggerEnabled = not triggerEnabled
+        elseif mode == 'Hold' then
+            triggerEnabled = true
+        end
+    end
+    
+    if input.KeyCode == Enum.KeyCode[Config['Keybinds']['Speed']] then
+        local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
+        if humanoid then
+            if not SpeedEnabled then
+                BaseSpeed = 16
+                SpeedEnabled = true
+            else
+                humanoid.WalkSpeed = BaseSpeed
+                SpeedEnabled = false
+            end
+        end
+    end
+    
+    if input.KeyCode == Enum.KeyCode[Config['Keybinds']['ESP']] then
+        Config['Visual Awareness']['Enabled'] = not Config['Visual Awareness']['Enabled']
+    end
+    
+    -- Super Jump Toggle
+    if input.KeyCode == Enum.KeyCode[Config['Keybinds']['Super Jump']] then
+        superJumpActive = not superJumpActive
+        print("Super Jump: " .. (superJumpActive and "ON" or "OFF"))
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input, processed)
+    if processed then return end
+    
+    if input.KeyCode == Enum.KeyCode[Config['Keybinds']['Target Lock']['Key']] then
+        local mode = Config['Keybinds']['Target Lock']['Mode']
+        
+        if mode == 'Hold' then
+            isLocking = false
+            currentTarget = nil
+            lastVisibleTarget = nil
+        end
+    end
+    
+    if input.KeyCode == Enum.KeyCode[Config['Keybinds']['Trigger Bot']['Key']] then
+        local mode = Config['Keybinds']['Trigger Bot']['Mode']
+        
+        if mode == 'Hold' then
+            triggerEnabled = false
+        end
+    end
+end)
+
+LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(1)
+end)
+-- Rapid Fire (hold MB1)
+local rapidFireActive = false
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        rapidFireActive = true
+    end
+    
+    -- ... your existing keybinds code ...
+end)
+
+UserInputService.InputEnded:Connect(function(input, gameProcessed)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        rapidFireActive = false
+    end
+    
+    -- ... your existing InputEnded code ...
+end)
+
+-- Rapid fire loop
+RunService.Heartbeat:Connect(function()
+    if not Config['Rapid Fire']['Enabled'] or not rapidFireActive then return end
+    
+    local character = LocalPlayer.Character
+    if not character then return end
+    
+    local tool = character:FindFirstChildOfClass("Tool")
+    if not tool then return end
+    
+    -- Optional: only allow on specific weapons
+    if Config['Rapid Fire']['Specific Weapons']['Enabled'] then
+        local valid = false
+        for _, wName in pairs(Config['Rapid Fire']['Specific Weapons']['Weapons']) do
+            if tool.Name == wName then
+                valid = true
+                break
+            end
+        end
+        if not valid then return end
+    end
+    
+    -- Fire the tool
+    tool:Activate()
+    
+    -- Small delay to prevent spam/lag
+    task.wait(Config['Rapid Fire']['Delay'])
+end)
+-- Infinite Range (no damage falloff, shoot from anywhere)
+local infRangeActive = false
+
+-- Toggle with key (N)
+UserInputService.InputBegan:Connect(function(input, processed)
+    if processed then return end
+    
+    if input.KeyCode == Enum.KeyCode[Config['Infinite Range']['Key']] then
+        infRangeActive = not infRangeActive
+        print("Infinite Range: " .. (infRangeActive and "ON" or "OFF"))
+    end
+end)
+
+-- Apply infinite range every frame
+RunService.RenderStepped:Connect(function()
+    if not Config['Infinite Range']['Enabled'] or not infRangeActive then return end
+    
+    local character = LocalPlayer.Character
+    if not character then return end
+    
+    local tool = character:FindFirstChildOfClass("Tool")
+    if not tool then return end
+    
+    -- Common Da Hood gun range properties (most guns use one of these)
+    local rangeProps = {"Range", "MaxRange", "FireRange", "Distance", "MaxDistance"}
+    
+    for _, propName in pairs(rangeProps) do
+        local rangeValue = tool:FindFirstChild(propName)
+        if rangeValue and rangeValue:IsA("NumberValue") then
+            rangeValue.Value = Config['Infinite Range']['Max Range']
+        end
+        
+        -- Some guns store it in config or module
+        local config = tool:FindFirstChild("Configuration") or tool:FindFirstChild("GunConfig")
+        if config then
+            local r = config:FindFirstChild(propName)
+            if r and r:IsA("NumberValue") then
+                r.Value = Config['Infinite Range']['Max Range']
+            end
+        end
+    end
+end)
+-- CLEAN UI (IMPROVED)
+
+local gui = Instance.new("ScreenGui")
+gui.Parent = game.CoreGui
+
+local text = Instance.new("TextLabel")
+text.Parent = gui
+
+text.AnchorPoint = Vector2.new(0.5, 1)
+text.Position = UDim2.new(0.5, 0, 1, -110)
+text.Size = UDim2.new(0, 260, 0, 160)
+
+text.BackgroundTransparency = 1
+text.TextXAlignment = Enum.TextXAlignment.Center
+text.TextYAlignment = Enum.TextYAlignment.Bottom
+
+text.Font = Enum.Font.GothamBlack
+text.TextSize = 19
+text.RichText = true
+
+-- MAKE TEXT THICKER
+text.TextStrokeTransparency = 0
+text.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+
+game:GetService("RunService").RenderStepped:Connect(function()
+    local lines = {}
+
+    -- TITLE
+    table.insert(lines, '<b><font color="rgb(0,0,0)">sanity.miami</font></b>')
+
+    -- SPEED WALK
+    if SpeedEnabled then
+        table.insert(lines, '<font color="rgb(0,0,51)">speed-walk</font><font color="rgb(50,205,50)">(true)</font>')
+    else
+        table.insert(lines, '<font color="rgb(0,0,51)">speed-walk()</font>')
+    end
+
+    -- SILENT AIM
+    if Config["Silent Aim"]["Enabled"] and currentTarget then
+        table.insert(lines, '<font color="rgb(-0,0,51)">silent-aim</font><font color="rgb(50,205,50)">(true)</font>')
+    else
+        table.insert(lines, '<font color="rgb(0,0,51)">silent-aim()</font>')
+    end
+
+    -- TRIGGER BOT
+    if Config["Trigger Bot"]["Enabled"] and triggerEnabled then
+        table.insert(lines, '<font color="rgb(0,0,51)">trigger-bot</font><font color="rgb(50,205,50)">(true)</font>')
+    else
+        table.insert(lines, '<font color="rgb(0,0,51)">trigger-bot()</font>')
+    end
+
+    -- INFINITE RANGE
+    if infRangeActive then
+        table.insert(lines, '<font color="rgb(0,0,51)">infinite-range</font><font color="rgb(50,205,50)">(true)</font>')
+    else
+        table.insert(lines, '<font color="rgb(0,0,51)">infinite-range()</font>')
+    end
+
+    text.Text = table.concat(lines, "\n")
+end)
+print("Accuracy Loaded, Stay Accurate")
